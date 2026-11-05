@@ -1,0 +1,14 @@
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Local database (rebuild it with: python -m app.import_data)
+*.db
+
+# Node
+node_modules/
+dist/
+
+# Secrets (API keys go here later, never in the code)
+.env

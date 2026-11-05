@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* Our design choices. Tailwind turns these into classes like bg-marigold and font-display. */
+@theme {
+  --color-ink: #18244f;
+  --color-muted: #56607f;
+  --color-rule: #a9b2cd;
+  --color-paper: #f8f9fd;
+  --color-marigold: #f5b301;
+  --font-display: "Baloo 2", system-ui, sans-serif;
+  --font-body: "Mukta", system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  line-height: 1.5;
+}
+
+a:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}

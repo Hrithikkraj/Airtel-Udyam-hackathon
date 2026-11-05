@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pandas
+pytest
+httpx
+python-dotenv
+python-multipart
+rapidocr-onnxruntime
+scikit-learn
