@@ -1,13 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { HINDI, LanguageContext, type LanguageCode } from './i18n'
-
-const STORAGE_KEY = 'accel-language'
+import { readLanguage, saveLanguage } from './storage'
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<LanguageCode>(() => (localStorage.getItem(STORAGE_KEY) === 'hi' ? 'hi' : 'en'))
+  const [language, setLanguageState] = useState<LanguageCode>(() => readLanguage())
 
   function setLanguage(newLanguage: LanguageCode) {
-    localStorage.setItem(STORAGE_KEY, newLanguage)
+    saveLanguage(newLanguage)
     setLanguageState(newLanguage)
     document.documentElement.lang = newLanguage
   }

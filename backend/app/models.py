@@ -114,6 +114,31 @@ class Lead(Base):
 
 # ---------- Filled as customers use the app ----------
 
+class User(Base):
+    """An owner's account. Business details live in the businesses table, linked by user_id."""
+    __tablename__ = "users"
+
+    user_id = Column(Integer, primary_key=True)
+    email = Column(String, nullable=False, unique=True, index=True)  # Stored in lowercase.
+    password_hash = Column(String, nullable=False)  # Argon2id. The password itself is never stored.
+    full_name = Column(String, nullable=False)
+    phone = Column(String)
+    preferred_language = Column(String, nullable=False, default="English")
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now)
+
+
+class AuthSession(Base):
+    """One signed-in browser. Only a hash of the cookie's token is kept."""
+    __tablename__ = "auth_sessions"
+
+    session_id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    token_hash = Column(String, nullable=False, unique=True, index=True)
+    created_at = Column(DateTime, default=utc_now)
+    expires_at = Column(DateTime, nullable=False)
+
+
 class Business(Base):
     __tablename__ = "businesses"
 
@@ -128,6 +153,8 @@ class Business(Base):
     preferred_language = Column(String)
     # A long random secret given only to this owner's browser. It protects their KYC and order data.
     access_token = Column(String, nullable=False)
+    # The account that owns this business, if the owner has signed in. Empty for anonymous orders.
+    user_id = Column(Integer, ForeignKey("users.user_id"))
     # A person's decision on a KYC review. Cleared when the documents change.
     kyc_review_decision = Column(String)  # approved or rejected
     kyc_review_note = Column(String)

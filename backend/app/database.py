@@ -27,6 +27,19 @@ def turn_on_foreign_keys(connection, _record):
         connection.execute("PRAGMA foreign_keys = ON")
 
 
+# Columns added after the first release. create_all makes new tables but never changes
+# existing ones, so these are added to an existing database without losing its data.
+LATER_COLUMNS = [("businesses", "user_id", "INTEGER REFERENCES users(user_id)")]
+
+
+def add_later_columns():
+    with engine.begin() as connection:
+        for table, column, column_type in LATER_COLUMNS:
+            existing = {row[1] for row in connection.exec_driver_sql(f"PRAGMA table_info({table})")}
+            if existing and column not in existing:
+                connection.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
+
+
 def get_db():
     """Give one API request its own database session, and always close it."""
     db = SessionLocal()

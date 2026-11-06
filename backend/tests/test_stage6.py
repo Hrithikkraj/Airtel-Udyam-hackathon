@@ -77,9 +77,9 @@ def test_an_owners_token_does_not_open_staff_pages(client, new_order):
     assert client.get("/api/staff/queue", headers=new_order[1]).status_code == 403
 
 
-def test_a_staff_key_does_not_open_an_owners_order(client, new_order):
+def test_a_staff_key_does_not_open_an_owners_order(anonymous, new_order):
     saved, _ = new_order
-    assert client.get(f"/api/orders/{saved['order_id']}", headers=STAFF).status_code == 403
+    assert anonymous.get(f"/api/orders/{saved['order_id']}", headers=STAFF).status_code == 403
 
 
 def test_built_in_key_stops_working_outside_demo_mode(client, monkeypatch):

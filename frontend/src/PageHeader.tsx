@@ -5,10 +5,11 @@ type Props = {
   intro: string
   isCompact?: boolean // Inner pages use a smaller band, so the content starts higher on a phone.
   onBack?: () => void
+  account?: { label: string; onClick: () => void }
 }
 
 // The marigold band at the top of every page, with the back button and the language switch.
-export default function PageHeader({ title, intro, isCompact = false, onBack }: Props) {
+export default function PageHeader({ title, intro, isCompact = false, onBack, account }: Props) {
   const { language, setLanguage, t } = useLanguage()
   return (
     <header className="bg-marigold">
@@ -26,6 +27,12 @@ export default function PageHeader({ title, intro, isCompact = false, onBack }: 
           ) : (
             <p className="font-semibold">Accel Business</p>
           )}
+          <div className="flex items-center gap-1">
+          {account && (
+            <button type="button" className="max-w-[10rem] truncate px-2 py-1.5 font-semibold underline underline-offset-4 hover:bg-ink/10" onClick={account.onClick}>
+              {account.label}
+            </button>
+          )}
           <button
             type="button"
             lang={language === 'hi' ? 'en' : 'hi'}
@@ -34,6 +41,7 @@ export default function PageHeader({ title, intro, isCompact = false, onBack }: 
           >
             {language === 'hi' ? 'English' : 'हिन्दी'}
           </button>
+          </div>
         </div>
         <h1
           className={`font-display leading-none font-bold ${isCompact ? 'mt-2 text-3xl sm:text-4xl' : 'mt-5 text-4xl sm:text-6xl'}`}

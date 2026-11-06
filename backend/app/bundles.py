@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .catalogue import load_catalogue
+from .auth import require_signed_in_owner
 from .database import get_db
 from .explain import explain
 from .pricing import calculate_quote
@@ -10,7 +11,7 @@ from .recommend import recommend
 from .rules import check_bundle
 from .schemas import BusinessProfile, QuoteOut, QuoteRequest, Recommendation
 
-router = APIRouter(prefix="/api/bundles", tags=["bundles"])
+router = APIRouter(prefix="/api/bundles", tags=["bundles"], dependencies=[Depends(require_signed_in_owner)])
 
 
 @router.post("/recommend", response_model=Recommendation)

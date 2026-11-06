@@ -390,18 +390,18 @@ def test_withdrawing_consent_deletes_details_and_blocks_uploads(client, owner, f
 
 
 @pytest.mark.parametrize("token", ["", "wrong-token"])
-def test_kyc_data_needs_the_owners_token(client, owner, token):
+def test_kyc_data_needs_the_owners_token(anonymous, owner, token):
     business_id, _headers = owner
-    response = client.get(f"/api/kyc/{business_id}/status", headers={"X-Access-Token": token})
+    response = anonymous.get(f"/api/kyc/{business_id}/status", headers={"X-Access-Token": token})
     assert response.status_code == 403
 
 
-def test_one_owners_token_cannot_read_another_business(client, owner):
+def test_one_owners_token_cannot_read_another_business(client, anonymous, owner):
     other = client.post(
         "/api/quotes",
         json={"profile": {"employee_count": 3, "city_tier": 2, "has_gstin": True}, "items": [{"product_id": "P01"}]},
     ).json()
-    response = client.get(f"/api/kyc/{owner[0]}/status", headers={"X-Access-Token": other["access_token"]})
+    response = anonymous.get(f"/api/kyc/{owner[0]}/status", headers={"X-Access-Token": other["access_token"]})
     assert response.status_code == 403
 
 

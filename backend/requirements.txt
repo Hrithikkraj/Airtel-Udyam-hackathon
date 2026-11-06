@@ -9,3 +9,4 @@ python-multipart
 rapidocr-onnxruntime
 pypdfium2
 scikit-learn
+argon2-cffi

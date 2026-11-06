@@ -1,10 +1,11 @@
 """Quote API: save the bundle the owner accepted."""
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from .catalogue import load_catalogue
+from .auth import require_signed_in_owner, remember_order, signed_in_user
 from .database import get_db
 from .models import Business, Order, Quote, QuoteItem
 from .order_state import QUOTE_CONFIRMED
@@ -12,11 +13,11 @@ from .pricing import calculate_quote
 from .rules import check_bundle
 from .schemas import QuoteSaved, SaveQuoteRequest
 
-router = APIRouter(prefix="/api/quotes", tags=["quotes"])
+router = APIRouter(prefix="/api/quotes", tags=["quotes"], dependencies=[Depends(require_signed_in_owner)])
 
 
 @router.post("", response_model=QuoteSaved, status_code=201)
-def save_quote(request: SaveQuoteRequest, db: Session = Depends(get_db)):
+def save_quote(request: SaveQuoteRequest, http_request: Request, response: Response, db: Session = Depends(get_db)):
     # Check and price again here, because the browser's copy can never be trusted.
     catalogue = load_catalogue(db)
     errors = check_bundle(request.items, request.profile, catalogue)
@@ -35,6 +36,8 @@ def save_quote(request: SaveQuoteRequest, db: Session = Depends(get_db)):
         preferred_language=profile.preferred_language,
         access_token=secrets.token_urlsafe(32),
     )
+    # Every order belongs to the signed-in owner, so it shows on their profile on any device.
+    business.user_id = signed_in_user(http_request, db).user_id
     quote = Quote(
         business=business,
         status="accepted",
@@ -56,6 +59,7 @@ def save_quote(request: SaveQuoteRequest, db: Session = Depends(get_db)):
     order = Order(business=business, quote=quote, status=QUOTE_CONFIRMED)
     db.add(order)
     db.commit()
+    remember_order(business, response)
     return QuoteSaved(
         quote_id=quote.quote_id,
         order_id=order.order_id,

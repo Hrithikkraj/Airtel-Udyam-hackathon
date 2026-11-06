@@ -2,12 +2,13 @@
 import os
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .access import get_owned_order
+from .auth import remember_order
 from .database import get_db
 from .models import Order, OrderEvent, Product, utc_now
 from .schemas import PhoneNumber
@@ -199,6 +200,13 @@ def build_order_out(order: Order, db: Session) -> OrderOut:
 
 @router.get("/{order_id}", response_model=OrderOut)
 def get_order(order: Order = Depends(get_owned_order), db: Session = Depends(get_db)):
+    return build_order_out(order, db)
+
+
+@router.post("/{order_id}/remember", response_model=OrderOut)
+def remember_this_order(response: Response, order: Order = Depends(get_owned_order), db: Session = Depends(get_db)):
+    """Moves an older browser's saved order secret into an HttpOnly cookie, so it can leave page storage."""
+    remember_order(order.business, response)
     return build_order_out(order, db)
 
 

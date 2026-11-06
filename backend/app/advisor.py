@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import llm
+from .auth import require_signed_in_owner
 from .catalogue import load_catalogue
 from .database import get_db
 from .explain import explain
@@ -180,7 +181,7 @@ def get_cities(db: Session = Depends(get_db)):
     return list_cities(db)
 
 
-@router.post("/message", response_model=AdvisorResponse)
+@router.post("/message", response_model=AdvisorResponse, dependencies=[Depends(require_signed_in_owner)])
 def advisor_message(request: AdvisorRequest, db: Session = Depends(get_db)):
     cities = list_cities(db)
     owner_turns = sum(message.role == "user" for message in request.messages)

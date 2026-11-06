@@ -6,12 +6,13 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from .catalogue import load_catalogue
+from .auth import require_signed_in_owner
 from .database import get_db
 from .models import CallbackRequest
 from .recommend import infer_segment, recommend
 from .schemas import BusinessProfile, PhoneNumber
 
-router = APIRouter(prefix="/api/callbacks", tags=["callbacks"])
+router = APIRouter(prefix="/api/callbacks", tags=["callbacks"], dependencies=[Depends(require_signed_in_owner)])
 
 CALLBACK_NOTICE_VERSION = "2026-07-callback-v1"
 

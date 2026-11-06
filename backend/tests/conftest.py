@@ -10,6 +10,8 @@ os.environ["DATABASE_URL"] = f"sqlite:///{test_db}"
 os.environ["GROQ_API_KEY"] = ""
 os.environ["GROKE_API_KEY"] = ""
 
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -22,7 +24,22 @@ def loaded_database():
     import_all()
 
 
+# Our cookies are Secure, so test browsers use HTTPS. They also send the CSRF header our pages send.
+TEST_BASE_URL = "https://testserver"
+CSRF_HEADERS = {"X-Accel-CSRF": "1"}
+
+
 @pytest.fixture
 def client():
-    with TestClient(app) as test_client:
+    """A browser with a newly signed-in owner, as the main journey needs one."""
+    with TestClient(app, base_url=TEST_BASE_URL, headers=CSRF_HEADERS) as test_client:
+        details = {"full_name": "Test Owner", "email": f"owner-{uuid.uuid4().hex[:10]}@example.com", "password": "correct horse 42"}
+        assert test_client.post("/api/account/signup", json=details).status_code == 201
+        yield test_client
+
+
+@pytest.fixture
+def anonymous():
+    """A browser nobody has signed in on, with no cookies. Used to prove access is refused."""
+    with TestClient(app, base_url=TEST_BASE_URL, headers=CSRF_HEADERS) as test_client:
         yield test_client

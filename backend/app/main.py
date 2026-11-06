@@ -3,13 +3,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from . import advisor, bundles, callbacks, catalogue, kyc, orders, quotes, staff
-from .database import Base, engine
+from . import accounts, advisor, bundles, callbacks, catalogue, kyc, orders, quotes, staff
+from .database import Base, add_later_columns, engine
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(engine)
+    add_later_columns()
     yield
 
 
@@ -22,6 +23,7 @@ app.include_router(kyc.router)
 app.include_router(orders.router)
 app.include_router(callbacks.router)
 app.include_router(staff.router)
+app.include_router(accounts.router)
 
 
 @app.get("/api/health")

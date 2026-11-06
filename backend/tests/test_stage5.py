@@ -129,27 +129,27 @@ def test_order_shows_saved_prices_after_a_catalogue_change(client, new_order):
 
 @pytest.mark.parametrize("action", ["place", "cancel", "help", "demo-advance"])
 @pytest.mark.parametrize("token", ["", "wrong"])
-def test_changing_an_order_needs_the_owners_token(client, new_order, action, token):
+def test_changing_an_order_needs_the_owners_token(client, anonymous, new_order, action, token):
     saved, _headers = new_order
-    response = client.post(f"/api/orders/{saved['order_id']}/{action}", headers={"X-Access-Token": token})
+    response = anonymous.post(f"/api/orders/{saved['order_id']}/{action}", headers={"X-Access-Token": token})
     assert response.status_code == 403
     assert get_order(client, new_order)["status"] == "quote_confirmed"
 
 
-def test_reading_an_order_needs_the_owners_token(client, new_order):
+def test_reading_an_order_needs_the_owners_token(anonymous, new_order):
     saved, _headers = new_order
-    assert client.get(f"/api/orders/{saved['order_id']}").status_code == 403
+    assert anonymous.get(f"/api/orders/{saved['order_id']}").status_code == 403
 
 
-def test_one_owner_cannot_read_anothers_order(client, new_order):
+def test_one_owner_cannot_read_anothers_order(client, anonymous, new_order):
     saved, _headers = new_order
     other = client.post("/api/quotes", json={"profile": SHOP, "items": ITEMS}).json()
-    response = client.get(f"/api/orders/{saved['order_id']}", headers={"X-Access-Token": other["access_token"]})
+    response = anonymous.get(f"/api/orders/{saved['order_id']}", headers={"X-Access-Token": other["access_token"]})
     assert response.status_code == 403
 
 
-def test_unknown_order_gives_the_same_answer_as_no_access(client):
-    assert client.get("/api/orders/999999", headers={"X-Access-Token": "x"}).status_code == 403
+def test_unknown_order_gives_the_same_answer_as_no_access(anonymous):
+    assert anonymous.get("/api/orders/999999", headers={"X-Access-Token": "x"}).status_code == 403
 
 
 # ---------- KYC moves the order ----------

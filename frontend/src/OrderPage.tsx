@@ -15,22 +15,22 @@ function shortDate(day: string) {
 
 const REFRESH_EVERY_MS = 20000
 
-type Props = { orderId: number; token: string; onVerify: () => void; onStartAgain: () => void }
+type Props = { orderId: number; onVerify: () => void; onStartAgain: () => void }
 
-export default function OrderPage({ orderId, token, onVerify, onStartAgain }: Props) {
+export default function OrderPage({ orderId, onVerify, onStartAgain }: Props) {
   const { t } = useLanguage()
   const [order, setOrder] = useState<Order>()
   const [isBusy, setIsBusy] = useState(false)
   const [error, setError] = useState('')
 
   const load = useCallback(() => {
-    fetchOrder(orderId, token)
+    fetchOrder(orderId)
       .then((loaded) => {
         setOrder(loaded)
         setError('')
       })
       .catch(() => setError('Your order did not load. Check your connection, then reload this page.'))
-  }, [orderId, token])
+  }, [orderId])
 
   // Keeps the tracker up to date while it is open, without the owner having to reload.
   useEffect(() => {
@@ -39,11 +39,11 @@ export default function OrderPage({ orderId, token, onVerify, onStartAgain }: Pr
     return () => clearInterval(timer)
   }, [load])
 
-  async function run(action: (id: number, accessToken: string) => Promise<Order>) {
+  async function run(action: (id: number) => Promise<Order>) {
     setIsBusy(true)
     setError('')
     try {
-      setOrder(await action(orderId, token))
+      setOrder(await action(orderId))
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'That did not work. Try again.')
     } finally {
@@ -189,7 +189,7 @@ export default function OrderPage({ orderId, token, onVerify, onStartAgain }: Pr
             <PhoneRequest
               buttonText="Ask our team for help"
               doneText="Help requested. Our team will call you."
-              onSend={async (phone) => setOrder(await requestHelp(orderId, token, phone))}
+              onSend={async (phone) => setOrder(await requestHelp(orderId, phone))}
             />
           )
         )}

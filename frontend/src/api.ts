@@ -89,20 +89,51 @@ export type AdvisorReply = {
   recommendation: Recommendation | null
 }
 
-// Sends a request and returns the reply. Rule errors from the server become readable text.
-async function request<T>(path: string, body?: unknown): Promise<T> {
+// Every request carries this header. Other websites cannot add it, so the server can tell that a
+// request which uses our cookies really came from our own pages.
+const SAME_SITE_HEADER = { 'X-Accel-CSRF': '1' }
+
+// Turns the server's error into readable text. Rule errors arrive as a list of sentences.
+async function errorText(response: Response, fallback: string): Promise<string> {
+  const error = await response.json().catch(() => null)
+  const detail = error?.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail) && typeof detail[0] === 'string') return detail.join('. ')
+  if (Array.isArray(detail) && typeof detail[0]?.msg === 'string') {
+    return detail.map((item: { msg: string }) => item.msg.replace(/^Value error, /, '')).join('. ')
+  }
+  return fallback
+}
+
+// Sends a request and returns the reply. Cookies go with it, but only to our own server.
+async function send<T>(path: string, options: { method?: string; json?: unknown; form?: FormData } = {}): Promise<T> {
+  const { method = options.json !== undefined || options.form ? 'POST' : 'GET', json, form } = options
   const response = await fetch(path, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    method,
+    credentials: 'same-origin',
+    headers: json !== undefined ? { ...SAME_SITE_HEADER, 'Content-Type': 'application/json' } : SAME_SITE_HEADER,
+    body: form ?? (json !== undefined ? JSON.stringify(json) : undefined),
   })
   if (!response.ok) {
-    const error = await response.json().catch(() => null)
-    const isRuleList = Array.isArray(error?.detail) && typeof error.detail[0] === 'string'
-    throw new Error(isRuleList ? error.detail.join('. ') : `Server replied with status ${response.status}`)
+    const isSignInCheck = path === '/api/account/me' || path === '/api/account/signin'
+    if (response.status === 401 && !isSignInCheck) window.dispatchEvent(new Event(SIGNED_OUT_EVENT))
+    throw new ApiError(response.status, await errorText(response, `Server replied with status ${response.status}`))
   }
-  return response.json()
+  return response.status === 204 ? (undefined as T) : response.json()
 }
+
+/** Fired when the server says this browser is no longer signed in. */
+export const SIGNED_OUT_EVENT = 'accel-signed-out'
+
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
+const request = <T,>(path: string, body?: unknown) => send<T>(path, body === undefined ? {} : { json: body })
 
 export const fetchProducts = () => request<Product[]>('/api/catalogue/products')
 export const fetchCities = () => request<City[]>('/api/advisor/cities')
@@ -121,7 +152,6 @@ export type SavedQuote = {
   quote_id: number
   order_id: number
   business_id: number
-  access_token: string
   status: string
   quote: Quote
 }
@@ -150,39 +180,27 @@ export type KycStatus = {
 
 export type KycNotice = { version: string; purpose: string; points: string[] }
 
-// KYC calls carry the owner's secret token, because they return personal details.
-async function kycRequest(businessId: number, token: string, path: string, method: string, body?: BodyInit, json = false) {
-  const response = await fetch(`/api/kyc/${businessId}${path}`, {
-    method,
-    headers: { 'X-Access-Token': token, ...(json ? { 'Content-Type': 'application/json' } : {}) },
-    body,
-  })
-  if (!response.ok) {
-    const error = await response.json().catch(() => null)
-    throw new Error(typeof error?.detail === 'string' ? error.detail : 'That did not work. Try again.')
-  }
-  return (await response.json()) as KycStatus
-}
+// KYC calls rely on this browser's HttpOnly order cookie, or the signed-in account, to prove ownership.
+const kycRequest = (businessId: number, path: string, method: string, options: { json?: unknown; form?: FormData } = {}) =>
+  send<KycStatus>(`/api/kyc/${businessId}${path}`, { method, ...options })
 
 export const fetchKycNotice = () => request<KycNotice>('/api/kyc/notice')
 
-export const fetchKycStatus = (businessId: number, token: string) => kycRequest(businessId, token, '/status', 'GET')
+export const fetchKycStatus = (businessId: number) => kycRequest(businessId, '/status', 'GET')
 
-export const giveKycConsent = (businessId: number, token: string, version: string) =>
-  kycRequest(businessId, token, '/consent', 'POST', JSON.stringify({ notice_version: version }), true)
+export const giveKycConsent = (businessId: number, version: string) =>
+  kycRequest(businessId, '/consent', 'POST', { json: { notice_version: version } })
 
-export const withdrawKycConsent = (businessId: number, token: string) =>
-  kycRequest(businessId, token, '/consent', 'DELETE')
+export const withdrawKycConsent = (businessId: number) => kycRequest(businessId, '/consent', 'DELETE')
 
-export const uploadKycDocument = (businessId: number, token: string, documentType: string, file: File) => {
+export const uploadKycDocument = (businessId: number, documentType: string, file: File) => {
   const form = new FormData()
   form.append('document_type', documentType)
   form.append('file', file)
-  return kycRequest(businessId, token, '/documents', 'POST', form)
+  return kycRequest(businessId, '/documents', 'POST', { form })
 }
 
-export const declareNoUdyam = (businessId: number, token: string) =>
-  kycRequest(businessId, token, '/no-udyam', 'POST')
+export const declareNoUdyam = (businessId: number) => kycRequest(businessId, '/no-udyam', 'POST')
 
 // ---------- Orders ----------
 
@@ -208,40 +226,30 @@ export type Order = {
   demo_mode: boolean
 }
 
-async function orderRequest(orderId: number, token: string, action = '') {
-  const response = await fetch(`/api/orders/${orderId}${action && `/${action}`}`, {
-    method: action ? 'POST' : 'GET',
-    headers: { 'X-Access-Token': token },
-  })
-  if (!response.ok) {
-    const error = await response.json().catch(() => null)
-    throw new Error(typeof error?.detail === 'string' ? error.detail : 'That did not work. Try again.')
-  }
-  return (await response.json()) as Order
-}
+const orderRequest = (orderId: number, action = '') =>
+  send<Order>(`/api/orders/${orderId}${action && `/${action}`}`, { method: action ? 'POST' : 'GET' })
 
-export const fetchOrder = (orderId: number, token: string) => orderRequest(orderId, token)
-export const placeOrder = (orderId: number, token: string) => orderRequest(orderId, token, 'place')
-export const cancelOrder = (orderId: number, token: string) => orderRequest(orderId, token, 'cancel')
-export async function requestHelp(orderId: number, token: string, phone: string) {
-  const response = await fetch(`/api/orders/${orderId}/help`, {
-    method: 'POST',
-    headers: { 'X-Access-Token': token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone }),
+export const fetchOrder = (orderId: number) => orderRequest(orderId)
+export const placeOrder = (orderId: number) => orderRequest(orderId, 'place')
+export const cancelOrder = (orderId: number) => orderRequest(orderId, 'cancel')
+export const advanceDemoOrder = (orderId: number) => orderRequest(orderId, 'demo-advance')
+export const requestHelp = (orderId: number, phone: string) =>
+  send<Order>(`/api/orders/${orderId}/help`, { json: { phone } }).catch(() => {
+    throw new Error('That did not work. Check the number and try again.')
   })
-  if (!response.ok) throw new Error('That did not work. Check the number and try again.')
-  return (await response.json()) as Order
-}
-export const advanceDemoOrder = (orderId: number, token: string) => orderRequest(orderId, token, 'demo-advance')
 
-export async function requestCallback(profile: Profile, city: string | null, phone: string) {
-  const response = await fetch('/api/callbacks', {
+// An older version of this app kept the order secret in page storage. This moves it into a cookie once.
+export const rememberOrder = (orderId: number, legacyToken: string) =>
+  fetch(`/api/orders/${orderId}/remember`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profile, city, phone, agreed_to_be_called: true }),
+    credentials: 'same-origin',
+    headers: { 'X-Access-Token': legacyToken },
+  }).then((response) => response.ok)
+
+export const requestCallback = (profile: Profile, city: string | null, phone: string) =>
+  send('/api/callbacks', { json: { profile, city, phone, agreed_to_be_called: true } }).catch(() => {
+    throw new Error('That did not work. Check the number and try again.')
   })
-  if (!response.ok) throw new Error('That did not work. Check the number and try again.')
-}
 
 // ---------- Staff ----------
 
@@ -257,3 +265,51 @@ export async function staffRequest<T>(key: string, path: string, body?: unknown,
   }
   return response.json()
 }
+
+// ---------- Accounts ----------
+
+export type AccountOrder = { order_id: number; status: string; status_label: string; monthly_total_inr: number; created_at: string }
+export type AccountBusiness = {
+  business_id: number
+  business_name: string | null
+  business_type: string | null
+  city: string | null
+  employee_count: number | null
+  num_sites: number | null
+  has_gstin: boolean
+  orders: AccountOrder[]
+}
+export type Account = {
+  user_id: number
+  full_name: string
+  email: string
+  phone: string | null
+  preferred_language: 'English' | 'Hindi'
+  created_at: string
+  businesses: AccountBusiness[]
+}
+
+export const signUp = (details: { full_name: string; email: string; password: string; phone: string | null }) =>
+  send<Account>('/api/account/signup', { json: details })
+
+export const signIn = (email: string, password: string) => send<Account>('/api/account/signin', { json: { email, password } })
+
+export const signOut = () => send<void>('/api/account/signout', { method: 'POST' })
+
+/** The signed-in account, or null when nobody is signed in on this browser. */
+export async function fetchAccount(): Promise<Account | null> {
+  try {
+    return await send<Account>('/api/account/me')
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return null
+    throw error
+  }
+}
+
+export const updateAccount = (changes: { full_name?: string; phone?: string; clear_phone?: boolean; preferred_language?: 'English' | 'Hindi' }) =>
+  send<Account>('/api/account/me', { method: 'PATCH', json: changes })
+
+export const updateBusiness = (businessId: number, changes: { business_name: string; business_type: string }) =>
+  send<Account>(`/api/account/businesses/${businessId}`, { method: 'PATCH', json: changes })
+
+export const claimBusiness = (businessId: number) => send<Account>(`/api/account/claim/${businessId}`, { method: 'POST' })

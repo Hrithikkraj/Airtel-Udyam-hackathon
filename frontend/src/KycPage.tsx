@@ -49,11 +49,11 @@ const OVERALL_MESSAGE: Record<string, { title: string; text: string }> = {
   failed: { title: 'We cannot continue with these documents', text: 'Upload a corrected document to fix the points above, or ask our team for help.' },
 }
 
-type Props = { businessId: number; token: string; hasGstin: boolean; onBack: () => void }
+type Props = { businessId: number; hasGstin: boolean; onBack: () => void }
 
 const BACK_BUTTON_TEXT = 'Back to my order'
 
-export default function KycPage({ businessId, token, hasGstin, onBack }: Props) {
+export default function KycPage({ businessId, hasGstin, onBack }: Props) {
   const { t } = useLanguage()
   const [notice, setNotice] = useState<KycNotice>()
   const [status, setStatus] = useState<KycStatus>()
@@ -63,13 +63,13 @@ export default function KycPage({ businessId, token, hasGstin, onBack }: Props) 
   const [error, setError] = useState('')
 
   useEffect(() => {
-    Promise.all([fetchKycNotice(), fetchKycStatus(businessId, token)])
+    Promise.all([fetchKycNotice(), fetchKycStatus(businessId)])
       .then(([loadedNotice, loadedStatus]) => {
         setNotice(loadedNotice)
         setStatus(loadedStatus)
       })
       .catch(() => setError('This page did not load. Check that the backend is running, then reload.'))
-  }, [businessId, token])
+  }, [businessId])
 
   async function runAction(action: () => Promise<KycStatus>) {
     setError('')
@@ -87,7 +87,7 @@ export default function KycPage({ businessId, token, hasGstin, onBack }: Props) 
     setBusySlot(slotType)
     setSlotErrors((errors) => ({ ...errors, [slotType]: '' }))
     try {
-      setStatus(await uploadKycDocument(businessId, token, slotType, file))
+      setStatus(await uploadKycDocument(businessId, slotType, file))
     } catch (caught) {
       const text = caught instanceof Error ? caught.message : 'That upload did not work. Try again.'
       setSlotErrors((errors) => ({ ...errors, [slotType]: text }))
@@ -98,7 +98,7 @@ export default function KycPage({ businessId, token, hasGstin, onBack }: Props) 
 
   function withdraw() {
     if (window.confirm('Withdraw consent and delete the details we read from your documents?')) {
-      runAction(() => withdrawKycConsent(businessId, token))
+      runAction(() => withdrawKycConsent(businessId))
     }
   }
 
@@ -142,7 +142,7 @@ export default function KycPage({ businessId, token, hasGstin, onBack }: Props) 
           <button
             type="button"
             className="bg-ink px-6 py-3 font-semibold text-paper"
-            onClick={() => runAction(() => giveKycConsent(businessId, token, notice.version))}
+            onClick={() => runAction(() => giveKycConsent(businessId, notice.version))}
           >
             {t('I agree, continue')}
           </button>
@@ -224,7 +224,7 @@ export default function KycPage({ businessId, token, hasGstin, onBack }: Props) 
                   <button
                     type="button"
                     className="text-sm font-semibold underline underline-offset-4"
-                    onClick={() => runAction(() => declareNoUdyam(businessId, token))}
+                    onClick={() => runAction(() => declareNoUdyam(businessId))}
                   >
                     {t('My business has no Udyam registration')}
                   </button>

@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy import delete, func, select
 
-from .database import Base, SessionLocal, engine
+from .database import Base, SessionLocal, add_later_columns, engine
 from .lead_score import add_scores
 from .models import GstinRecord, Lead, Product, UdyamRecord
 
@@ -46,6 +46,7 @@ def import_replaceable_tables():
 
 def import_all():
     Base.metadata.create_all(engine)
+    add_later_columns()
     import_products()
     import_replaceable_tables()
 
