@@ -39,7 +39,8 @@ def real_today() -> date:
     return date.today()
 MAX_ADDRESS_PROOF_AGE = timedelta(days=90)
 NAME_MATCH_THRESHOLD = 0.9
-MIN_AVERAGE_CONFIDENCE = 0.85
+# Page-level confidence includes low-quality watermark and footer text.
+MIN_AVERAGE_CONFIDENCE = 0.78
 
 def with_article(name: str) -> str:
     return f"an {name}" if name[0] in "aeiou" else f"a {name}"
