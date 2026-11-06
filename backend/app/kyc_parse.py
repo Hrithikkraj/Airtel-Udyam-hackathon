@@ -42,15 +42,41 @@ LABELS = {
         "id no.": "id_number",
         "valid till": "valid_till",
     },
+    # Real bills use many different labels for the same thing, so each field has several.
     ADDRESS_PROOF: {
         "consumer no.": "consumer_number",
+        "consumer number": "consumer_number",
         "billed to": "billed_to",
+        "consumer name": "billed_to",
+        "customer name": "billed_to",
+        "name of consumer": "billed_to",
+        "name": "billed_to",
         "supply address": "address",
+        "service address": "address",
+        "premises address": "address",
+        "installation address": "address",
+        "billing address": "address",
+        "address": "address",
         "bill date": "bill_date",
+        "billing date": "bill_date",
+        "bill issue date": "bill_date",
+        "date of bill": "bill_date",
+        "issue date": "bill_date",
+        "invoice date": "bill_date",
         "units consumed": "units",
         "amount due (inr)": "amount_due",
     },
 }
+
+# A bill is recognised by its words, not one exact title, because every company words it differently.
+BILL_WORDS = [
+    "electricitybill", "electricity", "consumer", "unitsconsumed", "kwh", "meter", "tariff",
+    "amountdue", "amountpayable", "duedate", "billdate", "billingperiod", "waterbill", "gasbill",
+]
+MIN_BILL_WORDS = 3
+
+# "Name : Ganesh Woodcraft" has its label and value on one line.
+LABEL_AND_VALUE = re.compile(r"^\s*([^:]{2,40}?)\s*:\s*(.+)$")
 
 # Fields we must be able to read before any document can be judged.
 REQUIRED_FIELDS = {
@@ -71,21 +97,34 @@ def is_similar(first: str, second: str, threshold: float = 0.85) -> bool:
 
 
 def detect_document_type(lines: list[str]) -> str | None:
-    """The title is near the top of the page, so only the first few lines are checked."""
+    """The title is near the top of the page, so the first few lines are checked first."""
     best_type, best_score = None, 0.8  # A title must be at least this close to count.
     for line in lines[:4]:
         cleaned = re.sub(r"^specimen", "", squeeze(line))
         for document_type, title in TITLE_WORDS.items():
             # GST and Udyam titles look alike, so keep the closest match, not the first.
-            score = SequenceMatcher(None, cleaned, title).ratio()
+            score = 1.0 if title in cleaned else SequenceMatcher(None, cleaned, title).ratio()
             if score > best_score:
                 best_type, best_score = document_type, score
-    return best_type
+    if best_type:
+        return best_type
+
+    whole_page = squeeze(" ".join(lines))
+    if sum(word in whole_page for word in BILL_WORDS) >= MIN_BILL_WORDS:
+        return ADDRESS_PROOF
+    return None
 
 
 def extract_fields(lines: list[str], document_type: str) -> dict[str, str]:
     """A value is every line after a label, up to the next label."""
     labels = {squeeze(label): field for label, field in LABELS[document_type].items()}
+
+    def field_for(text: str) -> str | None:
+        cleaned = squeeze(text)
+        if cleaned in labels:  # An exact match wins, so "Address" is not read as "Billing address".
+            return labels[cleaned]
+        return next((labels[known] for known in labels if is_similar(cleaned, known)), None)
+
     fields: dict[str, list[str]] = {}
     current_field = None
     for line in lines:
@@ -93,7 +132,17 @@ def extract_fields(lines: list[str], document_type: str) -> dict[str, str]:
         if "hackath" in cleaned:  # The small print at the foot of each specimen.
             current_field = None
             continue
-        label = next((labels[known] for known in labels if is_similar(cleaned, known)), None)
+
+        same_line = LABEL_AND_VALUE.match(line)
+        if same_line:
+            label = field_for(same_line.group(1))
+            # An unknown "Due Date : ..." line ends the field before it, so it is not mixed in.
+            current_field = label
+            if label and label not in fields:
+                fields[label] = [same_line.group(2).strip()]
+            continue
+
+        label = field_for(line)
         if label:
             current_field = label
             fields.setdefault(label, [])

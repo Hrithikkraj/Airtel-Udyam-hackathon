@@ -44,7 +44,8 @@ If the city is in this list, record it with this spelling: {cities}
 
 Rules:
 - Reply in {language}, in everyday words. Never show field names or values with underscores to the owner.
-- Record any new answer from the owner's latest message in the matching field, and leave other fields empty.
+- First record every answer in the owner's latest message in the matching field, including everything it says the business needs, in the needs list. Leave other fields empty.
+- Only ask about what is still missing. Do not suggest extra services.
 - Do not name products or mention prices. Our system chooses the products and prices afterwards.
 - Never ask for a GSTIN, Udyam, Aadhaar or PAN number. We only need to know yes or no. Do not repeat an ID number.
 - Do not say any registration has been checked or that anything has been bought.
@@ -54,16 +55,30 @@ Rules:
 Work out the segment field yourself from what the owner says. Never ask about segments or use that word with the owner.
 micro = shop or small service such as a kirana, salon or pharmacy. prof = office such as a clinic, CA firm or coaching centre. multi = 3 or more branches. mfg = factory or workshop.
 
-Whenever the owner states a number, record it: num_sites for branches or locations, camera_count for CCTV cameras in total, mobile_line_count for SIMs, vehicle_count for vehicles, machine_count for machines.
+Whenever the owner states a number, record it: budget_monthly_inr for a monthly budget, num_sites for branches or locations, camera_count for CCTV cameras in total, mobile_line_count for SIMs, vehicle_count for vehicles, machine_count for machines.
 
 Needs you may record, most important first:
-internet = basic internet. high_speed_internet = very fast internet for heavy use. dedicated_internet = guaranteed bandwidth for a factory or large office.
+internet = internet, including "reliable" or "good" internet. high_speed_internet = only when the owner asks for very fast internet or says they have heavy use. dedicated_internet = only when the owner asks for guaranteed bandwidth or a leased line.
 mobile_lines = business SIMs. premium_mobile_lines = SIMs with more data and roaming. failover = backup when the main line fails.
 multi_site_management = one managed or central network across branches. static_ip = fixed IP for cameras or servers. phone_system = office phone lines with call menus.
 toll_free = 1800 number. bulk_sms = SMS alerts and offers. whatsapp = verified WhatsApp channel and catalogue.
 email_office = business email and documents. cloud_backup = automatic backup. website = simple website and domain.
 pos_billing = billing and UPI or card payments. endpoint_security = antivirus. firewall = managed firewall. guest_wifi = separate Wi-Fi for customers.
 cctv = cameras with cloud recording. machine_monitoring = sensors on machines. fleet_tracking = GPS for vehicles."""
+
+# In testing, the LLM sometimes missed "internet" in a clear request, which gave a bundle with no
+# connection. So our own code also looks for it. Saying "internet" while buying from a telecom
+# company almost always means wanting it, and the owner can still switch it off on the quote.
+INTERNET_WORDS = re.compile(r"\binternet\b|\bwi-?fi\b|इंटरनेट|इन्टरनेट|वाई-?फ़?फाई", re.IGNORECASE)
+# "No internet needed" and "we already have internet" must not add it.
+NOT_WANTED_NEARBY = re.compile(
+    r"\b(no|not|don'?t|do not|without|already|have|has|got)\b.{0,25}\b(internet|wi-?fi)\b"
+    r"|\b(internet|wi-?fi)\b.{0,25}\b(not|nahi|nahin|no need|isn'?t|mat)\b"
+    r"|(इंटरनेट|इन्टरनेट).{0,20}(नहीं|मत|पहले से)"
+    r"|(बिना|पहले से).{0,20}(इंटरनेट|इन्टरनेट)",
+    re.IGNORECASE,
+)
+CONNECTION_NEEDS = {"internet", "high_speed_internet", "dedicated_internet"}
 
 # Sent to the LLM as "[hidden]", so identifiers typed into the chat never leave our server.
 IDENTIFIER_PATTERNS = [
@@ -100,6 +115,14 @@ def merge_answers(known: AdvisorAnswers, turn: AdvisorTurn) -> AdvisorAnswers:
             merged[field] = value
     merged["needs"] = list(dict.fromkeys([*known.needs, *turn.needs]))
     return AdvisorAnswers(**merged)
+
+
+def add_internet_if_mentioned(answers: AdvisorAnswers, owner_text: str) -> AdvisorAnswers:
+    if CONNECTION_NEEDS.intersection(answers.needs) or not INTERNET_WORDS.search(owner_text):
+        return answers
+    if NOT_WANTED_NEARBY.search(owner_text):
+        return answers
+    return answers.model_copy(update={"needs": ["internet", *answers.needs]})
 
 
 def missing_questions(answers: AdvisorAnswers, owner_turns: int) -> list[str]:
@@ -176,7 +199,7 @@ def advisor_message(request: AdvisorRequest, db: Session = Depends(get_db)):
     except llm.LLMUnavailable as error:
         raise HTTPException(status_code=503, detail="The advisor chat is not available") from error
 
-    answers = merge_answers(request.answers, turn)
+    answers = add_internet_if_mentioned(merge_answers(request.answers, turn), request.messages[-1].content)
     if missing_questions(answers, owner_turns):
         # Prices only ever come from our pricing code, so a reply that mentions money is dropped.
         reply = SAFE_QUESTION if re.search(r"₹|\bRs\.?\b|\bINR\b", turn.reply, re.IGNORECASE) else turn.reply

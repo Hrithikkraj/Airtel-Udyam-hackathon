@@ -25,6 +25,7 @@ from .kyc_parse import (
     clean_udyam,
     detect_document_type,
     extract_fields,
+    REQUIRED_FIELDS,
     mask_identifier,
 )
 from .kyc_rules import (
@@ -33,6 +34,8 @@ from .kyc_rules import (
     NEEDS_REVIEW,
     VERIFIED,
     Findings,
+    parse_date,
+    with_article,
     check_document,
     check_readability,
     compare_documents,
@@ -47,7 +50,7 @@ PURPOSE = "kyc_verification"
 NOTICE_POINTS = [
     "We ask for your GST certificate, Udyam certificate, signatory ID and a recent bill as address proof.",
     "We use them only to verify your business for this order. We do not use them for marketing or to train AI.",
-    "We read each image and do not keep it. We keep only the names, address, dates and masked ID numbers we checked.",
+    "We read each photo or PDF and do not keep it. We keep only the names, address, dates and masked ID numbers we checked.",
     "We check your GSTIN and Udyam number against the registries, and a person may review anything that does not match.",
     "You can withdraw at any time. We then delete these details, and we cannot activate your order until you verify again.",
 ]
@@ -162,6 +165,46 @@ def refuse_if_order_placed(business: Business, db: Session):
         raise HTTPException(status_code=409, detail="Your order has been placed, so documents can no longer be changed here.")
 
 
+DATE_FIELDS = {"registration_date", "valid_till", "bill_date"}
+
+
+def count_unusable_fields(fields: dict, document_type: str) -> int:
+    """A detail is usable if it makes sense: a date reads as a date, and a name or address has words.
+    Reading a page upside down puts details in the wrong place, which this catches."""
+    unusable = 0
+    for field in REQUIRED_FIELDS[document_type]:
+        value = fields.get(field, "")
+        if field in DATE_FIELDS:
+            unusable += parse_date(value) is None
+        else:
+            unusable += sum(character.isalpha() for character in value) < 3
+    return unusable
+
+
+def read_best_way_up(pixels, document_type: str):
+    """Photos are often sideways or upside down, which scrambles the order of the lines.
+    Read it as it is first. Only if that fails, try the other three ways up and keep the best."""
+    def attempt(image):
+        text_lines = kyc_ocr.read_text(image)
+        detected = detect_document_type([text for text, _confidence in text_lines])
+        fields = extract_fields([text for text, _confidence in text_lines], detected) if detected else {}
+        unusable = count_unusable_fields(fields, detected) if detected else 99
+        # Best: the right document with every detail usable. Then the right document. Then any document.
+        rank = (detected == document_type, detected is not None, -unusable)
+        return rank, image, text_lines, detected
+
+    best = attempt(pixels)
+    if best[0] == (True, True, 0):
+        return best[1:]
+    for quarter_turns in (2, 1, 3):
+        candidate = attempt(kyc_ocr.turned(pixels, quarter_turns))
+        if candidate[0] > best[0]:
+            best = candidate
+        if best[0] == (True, True, 0):
+            break
+    return best[1:]
+
+
 def fields_to_store(document_type: str, fields: dict) -> dict:
     kept = {name: fields[name] for name in FIELDS_TO_KEEP[document_type] if fields.get(name)}
     if document_type in ID_FIELDS:
@@ -262,14 +305,17 @@ def upload_document(
     except kyc_ocr.BadImage as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
-    text_lines = kyc_ocr.read_text(pixels)
+    pixels, text_lines, detected = read_best_way_up(pixels, document_type)
     lines = [text for text, _confidence in text_lines]
 
-    detected = detect_document_type(lines)
+    name = DOCUMENT_NAMES[document_type]
     if detected is None:
-        raise HTTPException(status_code=422, detail=f"We could not recognise this as a {DOCUMENT_NAMES[document_type]}. Upload a clearer image.")
+        raise HTTPException(
+            status_code=422,
+            detail=f"We could not recognise this as {with_article(name)}. Check it is the right document, the whole page is in the photo, and it is not blurred.",
+        )
     if detected != document_type:
-        raise HTTPException(status_code=422, detail=f"This looks like a {DOCUMENT_NAMES[detected]}. Upload your {DOCUMENT_NAMES[document_type]} here.")
+        raise HTTPException(status_code=422, detail=f"This looks like {with_article(DOCUMENT_NAMES[detected])}. Upload your {name} here.")
 
     fields = extract_fields(lines, document_type)
     average_confidence = sum(confidence for _text, confidence in text_lines) / len(text_lines)

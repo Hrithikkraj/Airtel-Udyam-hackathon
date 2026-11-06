@@ -45,6 +45,7 @@ def test_a_valid_answer_is_returned_as_a_checked_object(fake_server):
     assert turn.needs == ["internet"]
     assert requests[0]["auth"] == "Bearer test-key"
     assert requests[0]["body"]["model"] == llm.MODEL
+    assert requests[0]["body"]["temperature"] == 0
     assert requests[0]["body"]["messages"][0] == {"role": "system", "content": "system text"}
     assert requests[0]["body"]["messages"][1] == MESSAGES[0]
 

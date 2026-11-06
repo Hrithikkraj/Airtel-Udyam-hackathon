@@ -293,7 +293,6 @@ export default function StaffPage({ onExit }: { onExit: () => void }) {
         {error && <p role="alert" className="mt-2 font-semibold">{error}</p>}
         <div className="mt-4 flex items-center gap-4">
           <button type="submit" className="bg-ink px-6 py-3 font-semibold text-paper">Sign in</button>
-          <button type="button" className="font-semibold underline underline-offset-4" onClick={onExit}>Back</button>
         </div>
       </form>
     )

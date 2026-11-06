@@ -36,11 +36,11 @@ const FIELD_LABELS: Record<string, string> = {
   bill_date: 'Bill date',
 }
 
-const DOCUMENT_STATUS: Record<string, { text: string; style: string }> = {
-  verified: { text: 'Verified', style: 'bg-ink text-paper' },
-  needs_review: { text: 'Needs review', style: 'bg-marigold text-ink' },
-  failed: { text: 'Not accepted', style: 'border-2 border-ink text-ink' },
-  not_applicable: { text: 'Not needed', style: 'border-2 border-rule text-muted' },
+const DOCUMENT_STATUS: Record<string, { text: string; symbol: string; style: string }> = {
+  verified: { text: 'Verified', symbol: '✓', style: 'bg-ink text-paper' },
+  needs_review: { text: 'Needs review', symbol: '!', style: 'bg-marigold text-ink' },
+  failed: { text: 'Not accepted', symbol: '✕', style: 'border-2 border-ink text-ink' },
+  not_applicable: { text: 'Not needed', symbol: '–', style: 'border-2 border-rule text-muted' },
 }
 
 const OVERALL_MESSAGE: Record<string, { title: string; text: string }> = {
@@ -173,8 +173,14 @@ export default function KycPage({ businessId, token, hasGstin, onBack }: Props) 
                 <div>
                   <h2 className="font-display text-xl font-bold">{t(slot.label)}</h2>
                   {!document && <p className="text-sm text-muted">{t(slot.hint)}</p>}
+                  {!document && <p className="text-sm text-muted">{t('Photo or PDF, up to 15 MB.')}</p>}
                 </div>
-                {badge && <span className={`px-2 py-0.5 text-sm font-semibold ${badge.style}`}>{t(badge.text)}</span>}
+                {badge && (
+                  <span className={`flex items-center gap-1.5 px-2 py-0.5 text-sm font-semibold whitespace-nowrap ${badge.style}`}>
+                    <span aria-hidden="true">{badge.symbol}</span>
+                    {t(badge.text)}
+                  </span>
+                )}
               </div>
 
               {document && document.reasons.length > 0 && (
@@ -207,7 +213,7 @@ export default function KycPage({ businessId, token, hasGstin, onBack }: Props) 
                   {t(isBusy ? 'Reading your document…' : document ? 'Upload again' : 'Upload')}
                   <input
                     type="file"
-                    accept="image/png,image/jpeg"
+                    accept="image/png,image/jpeg,image/webp,application/pdf"
                     aria-label={`Upload ${slot.label}`}
                     className="sr-only"
                     disabled={Boolean(busySlot)}

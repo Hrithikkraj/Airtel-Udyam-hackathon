@@ -29,11 +29,21 @@ VERIFIED = "verified"
 NEEDS_REVIEW = "needs_review"
 FAILED = "failed"
 
-# The dataset README sets this as "today" for every date check.
+# The dataset README sets this as "today", and the sample documents are dated around it.
+# Age limits are measured from it. A date is only "in the future" if it is after the real date,
+# so a genuine bill from this week is not refused.
 TODAY = date(2026, 7, 15)
+
+
+def real_today() -> date:
+    return date.today()
 MAX_ADDRESS_PROOF_AGE = timedelta(days=90)
 NAME_MATCH_THRESHOLD = 0.9
 MIN_AVERAGE_CONFIDENCE = 0.85
+
+def with_article(name: str) -> str:
+    return f"an {name}" if name[0] in "aeiou" else f"a {name}"
+
 
 DOCUMENT_NAMES = {
     GST_CERTIFICATE: "GST certificate",
@@ -76,14 +86,29 @@ def same_text(first: str | None, second: str | None) -> bool:
     return bool(a and b) and SequenceMatcher(None, a, b).ratio() >= NAME_MATCH_THRESHOLD
 
 
+MONTHS = {name: number for number, name in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
+
+
 def parse_date(text: str | None) -> date | None:
-    match = re.search(r"\d{4}-\d{2}-\d{2}", text or "")
-    if not match:
-        return None
-    try:
-        return date.fromisoformat(match.group())
-    except ValueError:
-        return None
+    """Read 2026-05-30, 30/05/2026, 30-05-2026, 30.05.2026, 30 May 2026 or May 30, 2026.
+    Indian documents put the day first, so 05/06/2026 is 5 June."""
+    text = (text or "").strip()
+    patterns = [
+        (r"(\d{4})-(\d{1,2})-(\d{1,2})", lambda m: (m[1], m[2], m[3])),
+        (r"(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})", lambda m: (m[3], m[2], m[1])),
+        (r"(\d{1,2})[\s-]+([A-Za-z]{3})[A-Za-z]*[\s,-]+(\d{4})", lambda m: (m[3], MONTHS.get(m[2].lower()), m[1])),
+        (r"([A-Za-z]{3})[A-Za-z]*\s+(\d{1,2}),?\s+(\d{4})", lambda m: (m[3], MONTHS.get(m[1].lower()), m[2])),
+    ]
+    for pattern, order in patterns:
+        match = re.search(pattern, text)
+        if match:
+            year, month, day = order(match)
+            try:
+                return date(int(year), int(month), int(day))
+            except (TypeError, ValueError):
+                return None
+    return None
 
 
 def pin_code(address: str | None) -> str | None:
@@ -150,7 +175,7 @@ def check_signatory_id(fields, findings: Findings):
     valid_till = parse_date(fields.get("valid_till"))
     if valid_till is None:
         findings.review("We could not read the expiry date on the signatory ID")
-    elif valid_till < TODAY:
+    elif valid_till < max(TODAY, real_today()):
         findings.fail(f"The signatory ID expired on {valid_till.isoformat()}")
 
 
@@ -158,7 +183,7 @@ def check_address_proof(fields, findings: Findings):
     bill_date = parse_date(fields.get("bill_date"))
     if bill_date is None:
         findings.review("We could not read the date on the address proof")
-    elif bill_date > TODAY:
+    elif bill_date > real_today():
         findings.review(f"The address proof is dated in the future: {bill_date.isoformat()}")
     elif TODAY - bill_date > MAX_ADDRESS_PROOF_AGE:
         days_old = (TODAY - bill_date).days
@@ -178,13 +203,26 @@ def check_document(document_type: str, fields: dict, db: Session) -> Findings:
     return findings
 
 
+FIELD_NAMES = {
+    "legal_name": "legal name", "address": "address", "registration_date": "registration date",
+    "enterprise_name": "enterprise name", "city": "city", "state": "state", "name": "name",
+    "business_name": "business name", "valid_till": "expiry date", "billed_to": "name on the bill",
+    "bill_date": "bill date",
+}
+
+
 def check_readability(document_type, fields, average_confidence, sharpness, sharpness_limit) -> str | None:
     """Return why the image cannot be trusted, or None. Checked before any other rule."""
     name = DOCUMENT_NAMES[document_type]
     if sharpness < sharpness_limit:
         return f"The {name} image is too blurred to read safely. Upload a sharper photo"
-    if average_confidence < MIN_AVERAGE_CONFIDENCE or missing_required_fields(fields, document_type):
+    if average_confidence < MIN_AVERAGE_CONFIDENCE:
         return f"We could not read the {name} clearly. Upload a sharper photo"
+    missing = missing_required_fields(fields, document_type)
+    if missing:
+        # A clear photo with a detail missing needs a different fix from a blurred one.
+        listed = ", ".join(FIELD_NAMES.get(field, field) for field in missing)
+        return f"We could not find the {listed} on this {name}. Upload a full copy that shows it"
     return None
 
 

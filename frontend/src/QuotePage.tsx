@@ -34,11 +34,13 @@ type Props = {
   profile: Profile
   recommendation: Recommendation
   city: string | null
+  isAccepted: boolean // True when the owner comes back to a quote they already accepted.
   onBack: () => void
+  onViewOrder: () => void
   onSaved: (saved: SavedQuote) => void
 }
 
-export default function QuotePage({ profile, recommendation, city, onBack, onSaved }: Props) {
+export default function QuotePage({ profile, recommendation, city, isAccepted, onBack, onViewOrder, onSaved }: Props) {
   const { t } = useLanguage()
   const bundle = recommendation.bundle
   const [items, setItems] = useState<BundleItem[]>(bundle ? itemsFrom(bundle) : [])
@@ -100,6 +102,9 @@ export default function QuotePage({ profile, recommendation, city, onBack, onSav
 
   return (
     <div className="pt-8">
+      {isAccepted && (
+        <p className="mb-4 border-l-4 border-ink bg-white px-3 py-2 font-semibold">{t('You accepted this quote.')}</p>
+      )}
       <p className="max-w-[62ch] text-lg">{recommendation.explanation}</p>
 
       {bundle && (
@@ -117,7 +122,7 @@ export default function QuotePage({ profile, recommendation, city, onBack, onSav
                         type="checkbox"
                         className="size-5 shrink-0 translate-y-1 accent-ink"
                         checked={Boolean(item)}
-                        disabled={isBusy}
+                        disabled={isBusy || isAccepted}
                         onChange={() => toggle(option)}
                       />
                       {option.name}
@@ -134,7 +139,7 @@ export default function QuotePage({ profile, recommendation, city, onBack, onSav
                         <button
                           type="button"
                           aria-label={`Fewer ${option.name}`}
-                          disabled={isBusy || item.quantity === 1}
+                          disabled={isBusy || isAccepted || item.quantity === 1}
                           className="size-9 border-2 border-ink font-bold text-ink disabled:opacity-40"
                           onClick={() => changeQuantity(option.product_id, -1)}
                         >
@@ -146,7 +151,7 @@ export default function QuotePage({ profile, recommendation, city, onBack, onSav
                         <button
                           type="button"
                           aria-label={`More ${option.name}`}
-                          disabled={isBusy}
+                          disabled={isBusy || isAccepted}
                           className="size-9 border-2 border-ink font-bold text-ink disabled:opacity-40"
                           onClick={() => changeQuantity(option.product_id, 1)}
                         >
@@ -170,7 +175,7 @@ export default function QuotePage({ profile, recommendation, city, onBack, onSav
               <li key={alternative.quote.lines.map((line) => line.product_id).join()}>
                 <button
                   type="button"
-                  disabled={isBusy}
+                  disabled={isBusy || isAccepted}
                   className="text-left underline underline-offset-4 disabled:opacity-60"
                   onClick={() => changeBundle(itemsFrom(alternative))}
                 >
@@ -251,14 +256,20 @@ export default function QuotePage({ profile, recommendation, city, onBack, onSav
                   <p className="text-sm font-semibold">{rupees(overBudgetBy)} {t('over your')} {rupees(budget!)} {t('budget')}</p>
                 )}
               </div>
-              <button
-                type="button"
-                disabled={isBusy}
-                className="shrink-0 bg-ink px-4 py-3 font-semibold text-paper disabled:opacity-60"
-                onClick={accept}
-              >
-                {t('Accept quote')}
-              </button>
+              {isAccepted ? (
+                <button type="button" className="shrink-0 bg-ink px-4 py-3 font-semibold text-paper" onClick={onViewOrder}>
+                  {t('View my order')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  className="shrink-0 bg-ink px-4 py-3 font-semibold text-paper disabled:opacity-60"
+                  onClick={accept}
+                >
+                  {t('Accept quote')}
+                </button>
+              )}
             </div>
           </div>
         </div>

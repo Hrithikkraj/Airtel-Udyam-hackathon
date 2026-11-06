@@ -7,4 +7,5 @@ httpx
 python-dotenv
 python-multipart
 rapidocr-onnxruntime
+pypdfium2
 scikit-learn

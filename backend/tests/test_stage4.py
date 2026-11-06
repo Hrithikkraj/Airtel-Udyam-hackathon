@@ -1,6 +1,6 @@
 """KYC tests. OCR is replaced with known text here, so each rule can be tested on its own."""
 import io
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pandas as pd
 import pytest
@@ -222,7 +222,9 @@ def test_expired_signatory_id_fails():
 
 
 def test_id_valid_until_today_passes():
-    assert check(SIGNATORY_ID, {**GOOD_ID, "valid_till": TODAY.isoformat()}).status == VERIFIED
+    # "Expired" is judged against the real date, so a real ID that has run out is caught.
+    today = max(TODAY, date.today())
+    assert check(SIGNATORY_ID, {**GOOD_ID, "valid_till": today.isoformat()}).status == VERIFIED
 
 
 @pytest.mark.parametrize("days_old, expected", [(0, VERIFIED), (90, VERIFIED), (91, FAILED), (257, FAILED)])
@@ -232,7 +234,8 @@ def test_address_proof_age_limit(days_old, expected):
 
 
 def test_address_proof_from_the_future_goes_to_review():
-    bill_date = (TODAY + timedelta(days=1)).isoformat()
+    # "Future" is judged against the real date, so a genuine recent bill is not flagged.
+    bill_date = (date.today() + timedelta(days=1)).isoformat()
     assert check(ADDRESS_PROOF, {**GOOD_BILL, "bill_date": bill_date}).status == NEEDS_REVIEW
 
 

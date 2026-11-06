@@ -4,6 +4,11 @@ import { sendAdvisorMessage, type AdvisorAnswers, type ChatMessage, type Profile
 
 const LANGUAGES = ['English', 'Hindi', 'Marathi', 'Kannada', 'Gujarati', 'Telugu', 'Tamil', 'Bengali', 'Punjabi', 'Malayalam']
 const GREETING = 'Tell me about your business. What do you do, and where are you based?'
+const EXAMPLES = [
+  'I run a kirana shop in Patna with 2 people',
+  'I run a dental clinic in Pune with 8 staff',
+  'We have 5 restaurants in Bengaluru',
+]
 
 type Props = {
   onDone: (profile: Profile, recommendation: Recommendation, city: string | null) => void
@@ -63,14 +68,34 @@ export default function AdvisorChat({ onDone, onUseForm }: Props) {
       </div>
 
       <ul aria-live="polite" className="mt-6 space-y-3">
-        <li className="max-w-[85%] border-l-4 border-marigold pl-3">{t(GREETING)}</li>
+        <li className="max-w-[85%] border-l-4 border-marigold bg-white px-3 py-2">
+          <span className="block text-sm font-semibold text-muted">{t('Advisor')}</span>
+          {t(GREETING)}
+        </li>
+        {messages.length === 0 && (
+          <li>
+            <p className="text-sm text-muted">{t('For example:')}</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {EXAMPLES.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  className="border-2 border-rule bg-white px-3 py-1.5 text-left hover:border-ink"
+                  onClick={() => setText(t(example))}
+                >
+                  {t(example)}
+                </button>
+              ))}
+            </div>
+          </li>
+        )}
         {messages.map((message, index) => (
           <li
             key={index}
             className={
               message.role === 'user'
                 ? 'ml-auto w-fit max-w-[85%] bg-ink px-3 py-2 text-paper'
-                : 'max-w-[85%] border-l-4 border-marigold pl-3'
+                : 'max-w-[85%] border-l-4 border-marigold bg-white px-3 py-2'
             }
           >
             {message.content}

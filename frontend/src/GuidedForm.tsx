@@ -133,9 +133,9 @@ export default function GuidedForm({ notice, onDone }: Props) {
 
       <fieldset>
         <legend className={legendStyle}>{t('What kind of business do you run?')}</legend>
-        <div className="mt-2 space-y-2">
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
           {BUSINESS_KINDS.map((option) => (
-            <label key={option.value} className="flex items-start gap-3">
+            <label key={option.value} className="choice">
               <input
                 type="radio"
                 name="kind"
@@ -195,9 +195,9 @@ export default function GuidedForm({ notice, onDone }: Props) {
       <fieldset>
         <legend className={legendStyle}>{t('Do you have a GSTIN?')}</legend>
         <p className="text-sm text-muted">{t('Some services need one. We only ask yes or no here.')}</p>
-        <div className="mt-2 flex gap-6">
+        <div className="mt-2 grid max-w-sm grid-cols-2 gap-2">
           {['yes', 'no'].map((answer) => (
-            <label key={answer} className="flex items-center gap-2 capitalize">
+            <label key={answer} className="choice items-center font-semibold capitalize">
               <input
                 required
                 type="radio"
@@ -239,9 +239,9 @@ export default function GuidedForm({ notice, onDone }: Props) {
         {NEED_GROUPS.map((group) => (
           <fieldset key={group.title} className="mt-4">
             <legend className="font-semibold text-muted">{t(group.title)}</legend>
-            <div className="mt-1 grid gap-x-4 gap-y-2 sm:grid-cols-2">
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {group.needs.map((need) => (
-                <label key={need.value} className="flex items-start gap-3">
+                <label key={need.value} className="choice">
                   <input
                     type="checkbox"
                     className="mt-1 size-5 shrink-0 accent-ink"

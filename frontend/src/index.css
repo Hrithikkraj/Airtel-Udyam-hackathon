@@ -18,9 +18,33 @@ body {
   line-height: 1.5;
 }
 
-a:focus-visible {
+/* Keyboard users can always see where they are. */
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+summary:focus-visible,
+label:has(input:focus-visible) {
   outline: 3px solid var(--color-ink);
   outline-offset: 2px;
+}
+
+/* Tappable choices: a whole tile is the target, and the chosen one is filled in. */
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 2px solid var(--color-rule);
+  background: white;
+  padding: 0.625rem 0.75rem;
+  cursor: pointer;
+}
+.choice:hover {
+  border-color: var(--color-ink);
+}
+.choice:has(input:checked) {
+  border-color: var(--color-ink);
+  box-shadow: inset 4px 0 0 var(--color-marigold);
 }
 
 @media (prefers-reduced-motion: no-preference) {

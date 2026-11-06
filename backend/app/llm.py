@@ -52,6 +52,7 @@ def ask(system: str, messages: list[dict], response_shape: type[ResponseShape]) 
             "json_schema": {"name": response_shape.__name__, "schema": response_shape.model_json_schema()},
         },
         "reasoning_effort": "low",  # Short questions do not need deep thinking.
+        "temperature": 0,  # We are extracting facts, so the same message should give the same answer.
         "max_completion_tokens": 1500,
     }
     headers = {"Authorization": f"Bearer {api_key()}"}

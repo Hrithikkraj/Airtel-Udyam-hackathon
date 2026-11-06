@@ -107,6 +107,55 @@ def test_the_llm_is_told_what_is_known_and_what_is_missing(client, fake_llm):
     assert "how many people" in system
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Need reliable internet and email",
+        "INTERNET chahiye",
+        "We want wi-fi for the shop",
+        "इंटरनेट और व्हाट्सएप चाहिए",
+    ],
+)
+def test_internet_is_recorded_even_if_the_llm_misses_it(client, fake_llm, text):
+    # This happened in live testing: the LLM skipped "internet" and the bundle had no connection.
+    fake_llm({**COMPLETE_TURN, "needs": ["email_office"]})
+    body = chat(client, text).json()
+    assert "internet" in body["answers"]["needs"]
+    line_ids = [line["product_id"] for line in body["recommendation"]["bundle"]["quote"]["lines"]]
+    assert "P01" in line_ids
+
+
+def test_a_message_without_internet_does_not_add_it(client, fake_llm):
+    fake_llm({**COMPLETE_TURN, "needs": ["mobile_lines"]})
+    body = chat(client, "Only need two business SIMs").json()
+    assert body["answers"]["needs"] == ["mobile_lines"]
+    assert [line["product_id"] for line in body["recommendation"]["bundle"]["quote"]["lines"]] == ["P07"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "No internet needed at all right now. Just need 2 business SIMs.",
+        "We don't need internet",
+        "We already have internet, only SIMs please",
+        "internet nahi chahiye, sirf SIM",
+        "इंटरनेट नहीं चाहिए, सिर्फ़ सिम",
+        "इंटरनेट पहले से है",
+    ],
+)
+def test_saying_internet_is_not_wanted_does_not_add_it(client, fake_llm, text):
+    # Our first version of this check missed the "no" and added fibre nobody asked for.
+    fake_llm({**COMPLETE_TURN, "needs": ["mobile_lines"]})
+    body = chat(client, text).json()
+    assert body["answers"]["needs"] == ["mobile_lines"]
+    assert [line["product_id"] for line in body["recommendation"]["bundle"]["quote"]["lines"]] == ["P07"]
+
+
+def test_a_stronger_connection_need_is_not_downgraded(client, fake_llm):
+    fake_llm({**COMPLETE_TURN, "needs": ["high_speed_internet"]})
+    assert chat(client, "very fast internet please").json()["answers"]["needs"] == ["high_speed_internet"]
+
+
 def test_a_missing_segment_does_not_hold_up_an_owner_whose_size_we_know(client, fake_llm):
     # The live LLM once asked an owner which "segment" they were in, so this must not block.
     fake_llm({**COMPLETE_TURN, "segment": None, "employee_count": 8})
