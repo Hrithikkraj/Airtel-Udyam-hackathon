@@ -361,3 +361,29 @@ def recommend(profile: BusinessProfile, catalogue: Catalogue) -> Recommendation:
         over_budget=over_budget,
         assisted_reasons=assisted_reasons(profile, best_items, over_budget),
     )
+
+
+OWNER_CHOSE_IT = "You chose this from the rate list"
+
+
+def owner_chosen_plan(profile: BusinessProfile, items: list[BundleItem], catalogue: Catalogue) -> Recommendation:
+    """Turns a plan the owner picked from the rate list into a quote. The caller has already checked
+    it with check_bundle, so every rule that applies to a recommendation applies here too."""
+    segment = infer_segment(profile)
+    chosen_ids = {item.product_id for item in items}
+    bundle = RecommendedBundle(
+        quote=calculate_quote(items, catalogue),
+        reasons={item.product_id: OWNER_CHOSE_IT for item in items},
+        # The owner chose this, so there is no recommender score to show.
+        score=ScoreParts(needs_covered=0, size_fit=0, simplicity=0, total=0),
+    )
+    return Recommendation(
+        segment=segment,
+        bundle=bundle,
+        alternatives=[],
+        addons=build_addons(chosen_ids, [], set(), profile, segment, catalogue),
+        not_included=[],
+        over_budget=False,
+        assisted_reasons=assisted_reasons(profile, items, False),
+        chosen_by="owner",
+    )

@@ -5,9 +5,9 @@ from sqlalchemy.orm import Session
 from .catalogue import load_catalogue
 from .auth import require_signed_in_owner
 from .database import get_db
-from .explain import explain
+from .explain import explain, plan_explanation
 from .pricing import calculate_quote
-from .recommend import recommend
+from .recommend import owner_chosen_plan, recommend
 from .rules import check_bundle
 from .schemas import BusinessProfile, QuoteOut, QuoteRequest, Recommendation
 
@@ -28,3 +28,16 @@ def price_bundle(request: QuoteRequest, db: Session = Depends(get_db)):
     if errors:
         raise HTTPException(status_code=422, detail=errors)
     return calculate_quote(request.items, catalogue)
+
+
+@router.post("/plan", response_model=Recommendation)
+def owner_plan(request: QuoteRequest, db: Session = Depends(get_db)):
+    """A plan the owner built from the rate list. Refused with reasons if it breaks a rule,
+    such as CCTV with no connection or a GSTIN-only product for a business without one."""
+    catalogue = load_catalogue(db)
+    errors = check_bundle(request.items, request.profile, catalogue)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+    recommendation = owner_chosen_plan(request.profile, request.items, catalogue)
+    recommendation.explanation = plan_explanation(request.profile, recommendation)
+    return recommendation

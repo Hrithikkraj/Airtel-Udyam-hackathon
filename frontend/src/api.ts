@@ -77,6 +77,7 @@ export type Recommendation = {
   over_budget: boolean
   assisted_reasons: string[]
   explanation: string
+  chosen_by: 'advisor' | 'owner'
 }
 
 export type City = { city: string; city_tier: number }
@@ -144,6 +145,10 @@ export const sendAdvisorMessage = (messages: ChatMessage[], language: string, an
 
 export const fetchRecommendation = (profile: Profile) =>
   request<Recommendation>('/api/bundles/recommend', profile)
+
+// A plan the owner picked from the rate list. Refused with readable reasons if it breaks a rule.
+export const fetchOwnerPlan = (profile: Profile, items: BundleItem[]) =>
+  request<Recommendation>('/api/bundles/plan', { profile, items })
 
 export const priceBundle = (profile: Profile, items: BundleItem[]) =>
   request<Quote>('/api/bundles/quote', { profile, items })

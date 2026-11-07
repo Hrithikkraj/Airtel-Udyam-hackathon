@@ -219,7 +219,8 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
         </section>
       )}
 
-      {bundle && (
+      {/* An owner-built plan has no recommender score, so there is nothing to explain here. */}
+      {bundle && recommendation.chosen_by !== 'owner' && (
         <details className="mt-8 text-sm">
           <summary className="cursor-pointer font-semibold">{t('How we chose this bundle')}</summary>
           <ul className="mt-2 space-y-1 text-muted">
@@ -231,7 +232,7 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
       )}
 
       <button type="button" className="mt-8 font-semibold underline underline-offset-4" onClick={onBack}>
-        {t('Change my answers')}
+        {t(recommendation.chosen_by === 'owner' ? 'Change my plan' : 'Change my answers')}
       </button>
 
       {quote && (

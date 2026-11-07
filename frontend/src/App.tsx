@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import AdvisorChat from './AdvisorChat'
 import AuthPage from './AuthPage'
-import CataloguePage from './CataloguePage'
+import CataloguePage, { type Plan } from './CataloguePage'
 import GuidedForm from './GuidedForm'
 import JourneySteps, { type StepKey } from './JourneySteps'
 import KycPage from './KycPage'
@@ -87,6 +87,8 @@ export default function App() {
   const [acceptedRecommendation, setAcceptedRecommendation] = useState<Recommendation>()
   const [city, setCity] = useState<string | null>(null)
   const [formNotice, setFormNotice] = useState<string>()
+  // What the owner has picked on the rate list. Kept here so going back to the list keeps it.
+  const [plan, setPlan] = useState<Plan>({})
   const [authNotice, setAuthNotice] = useState('')
   const legacyToken = useRef(startingOrder.legacyToken)
 
@@ -309,7 +311,7 @@ export default function App() {
         />
       )}
       {screen === 'catalogue' ? (
-        <CataloguePage />
+        <CataloguePage plan={plan} onPlanChange={setPlan} onReviewed={showQuote} />
       ) : (
         <main className="mx-auto w-full max-w-3xl flex-1 px-4">
           {screen === 'advisor' && <AdvisorChat onDone={showQuote} onUseForm={openForm} />}
@@ -328,6 +330,7 @@ export default function App() {
               onSaved={(saved) => {
                 followOrder({ orderId: saved.order_id, businessId: saved.business_id, hasGstin: profile.has_gstin })
                 setAcceptedRecommendation(recommendation)
+                if (recommendation.chosen_by === 'owner') setPlan({}) // The plan is now an order.
                 goTo('order')
               }}
             />

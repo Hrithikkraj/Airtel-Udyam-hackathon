@@ -71,6 +71,18 @@ def plain_explanation_hindi(profile: BusinessProfile, recommendation: Recommenda
     return text
 
 
+def plan_explanation(profile: BusinessProfile, recommendation: Recommendation) -> str:
+    """For a plan the owner picked themselves, so it says what they chose rather than what we suggest."""
+    quote = recommendation.bundle.quote
+    count = len(quote.lines)
+    if profile.preferred_language == "Hindi":
+        setup = f" और एक बार का शुल्क {rupees(quote.setup_total_inr)}" if quote.setup_total_inr else ""
+        return f"आपके प्लान में {count} सेवाएँ हैं। खर्च {rupees(quote.monthly_total_inr)} प्रति माह{setup}।"
+    services = "1 service" if count == 1 else f"{count} services"
+    setup = f" and {rupees(quote.setup_total_inr)} one time" if quote.setup_total_inr else ""
+    return f"Your plan has {services} from the rate list. It costs {rupees(quote.monthly_total_inr)} a month{setup}."
+
+
 def numbers_in(text: str) -> set[int]:
     return {int(number.replace(",", "")) for number in re.findall(r"\d[\d,]*", text)}
 

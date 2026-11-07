@@ -137,6 +137,8 @@ class Recommendation(BaseModel):
     over_budget: bool
     assisted_reasons: list[str]  # Empty when the owner can finish alone.
     explanation: str = ""
+    # "advisor" when our recommender chose the bundle, "owner" when the owner picked it from the rate list.
+    chosen_by: Literal["advisor", "owner"] = "advisor"
 
 
 class SaveQuoteRequest(QuoteRequest):
