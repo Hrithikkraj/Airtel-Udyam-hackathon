@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import llm
+from .answer_checks import ask, check_new_answers, not_understood
 from .auth import require_signed_in_owner
 from .catalogue import load_catalogue
 from .database import get_db
@@ -41,6 +42,7 @@ What the owner has already told us, which you must not ask again: {known}
 What we still need to find out: {missing}
 
 Ask about the first missing item only, in one short plain question. Mention what the options are only if it helps.
+Record any place the owner names as the city, as they wrote it, even if it is outside India or not in this list. Our system checks it.
 If the city is in this list, record it with this spelling: {cities}
 
 Rules:
@@ -126,26 +128,42 @@ def add_internet_if_mentioned(answers: AdvisorAnswers, owner_text: str) -> Advis
     return answers.model_copy(update={"needs": ["internet", *answers.needs]})
 
 
-def missing_questions(answers: AdvisorAnswers, owner_turns: int) -> list[str]:
+# Each step the advisor may still need, and how it is described to the LLM.
+STEP_DESCRIPTIONS = {
+    "kind": "what kind of business it is",
+    "people": "how many people work there",
+    "branches": "how many branches it has",
+    "city": "which city it is in",
+    "gstin": "whether it has a GSTIN, yes or no",
+    "needs": "what it needs, such as internet, business SIMs, WhatsApp, billing, email or CCTV",
+    "internet": "what internet it uses today",
+}
+
+
+def missing_steps(answers: AdvisorAnswers, owner_turns: int) -> list[str]:
     """What we must still ask, in order. An empty list means we can recommend a bundle."""
     missing = []
     # Once we know the size, our code can work out the segment if the LLM did not.
     if answers.segment is None and answers.employee_count is None:
-        missing.append("what kind of business it is")
+        missing.append("kind")
     if answers.employee_count is None:
-        missing.append("how many people work there")
+        missing.append("people")
     if answers.segment == "multi" and answers.num_sites is None:
-        missing.append("how many branches it has")
+        missing.append("branches")
     if answers.city is None:
-        missing.append("which city it is in")
+        missing.append("city")
     if answers.has_gstin is None:
-        missing.append("whether it has a GSTIN, yes or no")
+        missing.append("gstin")
     if not answers.needs:
-        missing.append("what it needs, such as internet, business SIMs, WhatsApp, billing, email or CCTV")
+        missing.append("needs")
     # This one helps the advice but is not essential, so an owner who skips it is not held up.
     if answers.current_internet is None and owner_turns < GIVE_UP_ON_OPTIONAL_AFTER_TURNS:
-        missing.append("what internet it uses today")
+        missing.append("internet")
     return missing
+
+
+def missing_questions(answers: AdvisorAnswers, owner_turns: int) -> list[str]:
+    return [STEP_DESCRIPTIONS[step] for step in missing_steps(answers, owner_turns)]
 
 
 def profile_from_answers(answers: AdvisorAnswers, cities, language) -> BusinessProfile:
@@ -200,10 +218,26 @@ def advisor_message(request: AdvisorRequest, db: Session = Depends(get_db)):
     except llm.LLMUnavailable as error:
         raise HTTPException(status_code=503, detail="The advisor chat is not available") from error
 
-    answers = add_internet_if_mentioned(merge_answers(request.answers, turn), request.messages[-1].content)
-    if missing_questions(answers, owner_turns):
-        # Prices only ever come from our pricing code, so a reply that mentions money is dropped.
-        reply = SAFE_QUESTION if re.search(r"₹|\bRs\.?\b|\bINR\b", turn.reply, re.IGNORECASE) else turn.reply
+    latest = request.messages[-1].content
+    owner_texts = [message.content for message in request.messages if message.role == "user"]
+    language = request.preferred_language
+    # Only believable answers are kept: a city we serve, a place the owner typed, a sensible number.
+    turn, problems = check_new_answers(turn, owner_texts, cities, language)
+    answers = add_internet_if_mentioned(merge_answers(request.answers, turn), latest)
+    still_missing = missing_steps(answers, owner_turns)
+    if still_missing:
+        next_question = ask(still_missing[0], language)
+        if problems:
+            # Say what was wrong, then ask the same question again.
+            reply = " ".join([*problems, next_question])
+        elif answers == request.answers and language in ("English", "Hindi"):
+            # "hello", "asdf" or an off-topic question gave no answer, so ask again plainly.
+            reply = f"{not_understood(latest, language)} {next_question}"
+        elif re.search(r"₹|\bRs\.?\b|\bINR\b", turn.reply, re.IGNORECASE):
+            # Prices only ever come from our pricing code, so a reply that mentions money is dropped.
+            reply = next_question
+        else:
+            reply = turn.reply
         return AdvisorResponse(reply=reply, answers=answers)
 
     profile = profile_from_answers(answers, cities, request.preferred_language)

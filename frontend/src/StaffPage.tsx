@@ -51,8 +51,8 @@ const TABS = [
   { id: 'leads', label: 'Leads to call' },
 ]
 
-const smallButton = 'border-2 border-ink px-3 py-1.5 font-semibold disabled:opacity-60'
-const mainButton = 'bg-ink px-3 py-1.5 font-semibold text-paper disabled:opacity-60'
+const smallButton = 'border border-field px-3 py-1.5 font-semibold disabled:opacity-60'
+const mainButton = 'bg-accent px-3 py-1.5 font-semibold text-white disabled:opacity-60'
 
 function describe(order: OrderSummary) {
   const place = order.city ?? 'City not listed'
@@ -61,8 +61,8 @@ function describe(order: OrderSummary) {
 
 function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
   return (
-    <section className="mt-8">
-      <h2 className="border-b-4 border-ink font-display text-2xl font-bold">
+    <section className="panel mt-6">
+      <h2 className="section-title">
         {title} <span className="font-body text-lg font-normal text-muted tabular-nums">{count}</span>
       </h2>
       {count === 0 ? <p className="py-3 text-muted">Nothing waiting.</p> : <ul className="divide-y divide-rule">{children}</ul>}
@@ -73,7 +73,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
 function DocumentReasons({ review }: { review: Review }) {
   const withReasons = review.documents.filter((document) => document.reasons.length > 0)
   return (
-    <ul className="mt-2 space-y-1 border-l-4 border-marigold pl-3">
+    <ul className="notice-warn mt-2 space-y-1">
       {withReasons.flatMap((document) => document.reasons.map((reason) => <li key={reason}>{reason}.</li>))}
       {(review.problems ?? []).map((problem) => <li key={problem}>{problem}.</li>)}
     </ul>
@@ -90,7 +90,7 @@ function ReviewItem({ review, onDecide, isBusy }: { review: Review; onDecide: (i
       <label className="mt-3 block text-sm font-semibold">
         Note for the owner (needed if you send documents back)
         <input
-          className="mt-1 w-full border-2 border-ink bg-white px-2 py-1.5 font-normal"
+          className="mt-1 w-full border bg-white px-2 py-1.5 font-normal"
           maxLength={300}
           value={note}
           onChange={(event) => setNote(event.target.value)}
@@ -136,7 +136,7 @@ function WorkQueue({ staffKey }: { staffKey: string }) {
 
   return (
     <div>
-      {error && <p role="alert" className="mt-6 border-l-4 border-marigold pl-3 font-semibold">{error}</p>}
+      {error && <p role="alert" className="notice-error mt-6 font-medium">{error}</p>}
 
       <Section title="Documents to review" count={queue.kyc_reviews.length}>
         {queue.kyc_reviews.map((review) => (
@@ -158,7 +158,7 @@ function WorkQueue({ staffKey }: { staffKey: string }) {
               {callback.num_sites === 1 ? '' : 's'}
               {callback.monthly_estimate_inr ? `, about ${rupees(callback.monthly_estimate_inr)} a month` : ''}
             </p>
-            <ul className="mt-2 space-y-1 border-l-4 border-marigold pl-3">
+            <ul className="notice-warn mt-2 space-y-1">
               {callback.reasons.map((reason) => <li key={reason}>{reason}.</li>)}
             </ul>
             <button type="button" disabled={isBusy} className={`${smallButton} mt-2`} onClick={() => act(`callbacks/${callback.callback_id}/close`)}>
@@ -227,12 +227,12 @@ function LeadsToCall({ staffKey }: { staffKey: string }) {
         Past leads who dropped out for a reason a call could fix, most promising first. The score only orders this list.
         It never decides who can buy.
       </p>
-      <ol className="mt-4 divide-y divide-rule border-t-4 border-ink">
+      <ol className="panel mt-4 divide-y divide-rule">
         {leads.map((lead) => (
           <li key={lead.lead_id} className="py-3">
             <div className="flex items-baseline justify-between gap-3">
               <p className="font-semibold">{lead.business_name}</p>
-              <p className="font-display font-bold whitespace-nowrap tabular-nums">{lead.score_pct}%</p>
+              <p className="font-display font-semibold whitespace-nowrap tabular-nums">{lead.score_pct}%</p>
             </div>
             <p className="text-sm text-muted">{lead.city}, {lead.segment}, from {lead.source.toLowerCase()}</p>
             <p className="mt-1">Dropped because: {lead.drop_reason.toLowerCase()}</p>
@@ -278,21 +278,21 @@ export default function StaffPage({ onExit }: { onExit: () => void }) {
 
   if (!staffKey) {
     return (
-      <form onSubmit={signIn} className="max-w-sm py-8">
+      <form onSubmit={signIn} className="panel my-6 max-w-sm">
         <label className="block font-semibold">
           Staff key
           <input
             type="password"
             required
             autoComplete="off"
-            className="mt-1 w-full border-2 border-ink bg-white px-3 py-2 text-lg"
+            className="mt-1 w-full border bg-white px-3 py-2.5 text-base"
             value={typedKey}
             onChange={(event) => setTypedKey(event.target.value)}
           />
         </label>
         {error && <p role="alert" className="mt-2 font-semibold">{error}</p>}
         <div className="mt-4 flex items-center gap-4">
-          <button type="submit" className="bg-ink px-6 py-3 font-semibold text-paper">Sign in</button>
+          <button type="submit" className="bg-accent px-6 py-3 font-semibold text-white">Sign in</button>
         </div>
       </form>
     )
@@ -308,14 +308,14 @@ export default function StaffPage({ onExit }: { onExit: () => void }) {
               role="tab"
               type="button"
               aria-selected={tab === item.id}
-              className={`border-b-4 py-1 font-semibold ${tab === item.id ? 'border-marigold' : 'border-transparent text-muted'}`}
+              className={`border-b-2 py-1 font-semibold ${tab === item.id ? 'border-accent text-accent' : 'border-transparent text-muted'}`}
               onClick={() => setTab(item.id)}
             >
               {item.label}
             </button>
           ))}
         </div>
-        <button type="button" className="text-sm font-semibold underline underline-offset-4" onClick={signOut}>
+        <button type="button" className="text-sm font-medium text-accent underline underline-offset-4" onClick={signOut}>
           Sign out
         </button>
       </div>

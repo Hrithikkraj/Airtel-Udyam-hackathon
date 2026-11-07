@@ -103,13 +103,13 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
   return (
     <div className="pt-8">
       {isAccepted && (
-        <p className="mb-4 border-l-4 border-ink bg-white px-3 py-2 font-semibold">{t('You accepted this quote.')}</p>
+        <p className="notice-success mb-4 font-medium">{t('You accepted this quote.')}</p>
       )}
       <p className="max-w-[62ch] text-lg">{recommendation.explanation}</p>
 
       {bundle && (
-        <section className="mt-8">
-          <h2 className="border-b-4 border-ink font-display text-2xl font-bold">{t('Your bundle')}</h2>
+        <section className="panel mt-6">
+          <h2 className="section-title">{t('Your bundle')}</h2>
           <ul className="divide-y divide-rule">
             {shownOptions.map((option) => {
               const item = items.find((i) => i.product_id === option.product_id)
@@ -120,14 +120,14 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
                     <label className="flex items-baseline gap-3 font-semibold">
                       <input
                         type="checkbox"
-                        className="size-5 shrink-0 translate-y-1 accent-ink"
+                        className="size-5 shrink-0 translate-y-1 accent-accent"
                         checked={Boolean(item)}
                         disabled={isBusy || isAccepted}
                         onChange={() => toggle(option)}
                       />
                       {option.name}
                     </label>
-                    <span aria-hidden="true" className="min-w-4 flex-1 border-b-2 border-dotted border-rule" />
+                    <span aria-hidden="true" className="min-w-4 flex-1 border-b border-dotted border-field" />
                     <span className="font-display font-semibold whitespace-nowrap tabular-nums">
                       {item && line ? rupees(line.monthly_inr) : `+${rupees(option.monthly_inr)}`}
                     </span>
@@ -140,7 +140,7 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
                           type="button"
                           aria-label={`Fewer ${option.name}`}
                           disabled={isBusy || isAccepted || item.quantity === 1}
-                          className="size-9 border-2 border-ink font-bold text-ink disabled:opacity-40"
+                          className="size-9 border border-field font-semibold text-ink disabled:opacity-40"
                           onClick={() => changeQuantity(option.product_id, -1)}
                         >
                           −
@@ -152,7 +152,7 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
                           type="button"
                           aria-label={`More ${option.name}`}
                           disabled={isBusy || isAccepted}
-                          className="size-9 border-2 border-ink font-bold text-ink disabled:opacity-40"
+                          className="size-9 border border-field font-semibold text-ink disabled:opacity-40"
                           onClick={() => changeQuantity(option.product_id, 1)}
                         >
                           +
@@ -168,8 +168,8 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
       )}
 
       {recommendation.alternatives.length > 0 && (
-        <section className="mt-8">
-          <h2 className="font-display text-xl font-bold">{t('Other ways to build it')}</h2>
+        <section className="panel mt-6">
+          <h2 className="font-display text-lg font-semibold">{t('Other ways to build it')}</h2>
           <ul className="mt-2 space-y-2">
             {recommendation.alternatives.map((alternative) => (
               <li key={alternative.quote.lines.map((line) => line.product_id).join()}>
@@ -188,8 +188,8 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
       )}
 
       {recommendation.not_included.length > 0 && (
-        <section className="mt-8 border-l-4 border-marigold pl-3">
-          <h2 className="font-display text-xl font-bold">{t('What we could not include')}</h2>
+        <section className="notice-warn mt-6">
+          <h2 className="font-display text-xl font-semibold">{t('What we could not include')}</h2>
           <ul className="mt-1 space-y-1">
             {recommendation.not_included.flatMap((entry) =>
               entry.reasons.map((reason) => <li key={reason}>{reason}.</li>),
@@ -199,8 +199,8 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
       )}
 
       {recommendation.assisted_reasons.length > 0 && (
-        <section className="mt-8 border-l-4 border-ink pl-3">
-          <h2 className="font-display text-xl font-bold">{t('Our team will need to help with this')}</h2>
+        <section className="notice mt-6">
+          <h2 className="font-display text-xl font-semibold">{t('Our team will need to help with this')}</h2>
           <ul className="mt-1 space-y-1">
             {recommendation.assisted_reasons.map((reason) => (
               <li key={reason}>{reason}.</li>
@@ -231,21 +231,21 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
         </details>
       )}
 
-      <button type="button" className="mt-8 font-semibold underline underline-offset-4" onClick={onBack}>
+      <button type="button" className="mt-8 font-medium text-accent underline underline-offset-4" onClick={onBack}>
         {t(recommendation.chosen_by === 'owner' ? 'Change my plan' : 'Change my answers')}
       </button>
 
       {quote && (
-        <div className="sticky bottom-0 -mx-4 mt-8 border-t-4 border-ink bg-paper">
+        <div className="sticky-bar sticky bottom-0 -mx-4 mt-8">
           <div className="px-4 py-3">
             {message && (
-              <p role="alert" className="mb-2 border-l-4 border-marigold pl-2 text-sm font-semibold">
+              <p role="alert" className="notice-error mb-2 text-sm font-medium">
                 {message}
               </p>
             )}
             <div className="flex items-center justify-between gap-3">
               <div aria-live="polite">
-                <p className="font-display text-2xl leading-tight font-bold tabular-nums">
+                <p className="font-display text-2xl leading-tight font-semibold tabular-nums">
                   {rupees(quote.monthly_total_inr)} {t('a month')}
                 </p>
                 <p className="text-sm text-muted">
@@ -258,14 +258,14 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
                 )}
               </div>
               {isAccepted ? (
-                <button type="button" className="shrink-0 bg-ink px-4 py-3 font-semibold text-paper" onClick={onViewOrder}>
+                <button type="button" className="shrink-0 bg-accent px-4 py-3 font-semibold text-white" onClick={onViewOrder}>
                   {t('View my order')}
                 </button>
               ) : (
                 <button
                   type="button"
                   disabled={isBusy}
-                  className="shrink-0 bg-ink px-4 py-3 font-semibold text-paper disabled:opacity-60"
+                  className="shrink-0 bg-accent px-4 py-3 font-semibold text-white disabled:opacity-60"
                   onClick={accept}
                 >
                   {t('Accept quote')}

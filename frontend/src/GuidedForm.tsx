@@ -66,8 +66,8 @@ const OTHER_CITY = 'other'
 // Cities outside our list count as tier 2, the same rule the backend uses.
 const OTHER_CITY_TIER = 2
 
-const inputStyle = 'mt-1 w-full border-2 border-ink bg-white px-3 py-2 text-lg'
-const legendStyle = 'font-display text-xl font-bold'
+const inputStyle = 'mt-1 w-full border bg-white px-3 py-2.5 text-base'
+const legendStyle = 'font-display text-lg font-semibold'
 
 type Props = {
   notice?: string
@@ -128,8 +128,8 @@ export default function GuidedForm({ notice, onDone }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8 py-8">
-      {notice && <p className="border-l-4 border-marigold pl-3">{t(notice)}</p>}
+    <form onSubmit={handleSubmit} className="panel my-6 space-y-8">
+      {notice && <p className="notice">{t(notice)}</p>}
 
       <fieldset>
         <legend className={legendStyle}>{t('What kind of business do you run?')}</legend>
@@ -139,7 +139,7 @@ export default function GuidedForm({ notice, onDone }: Props) {
               <input
                 type="radio"
                 name="kind"
-                className="mt-1.5 size-5 accent-ink"
+                className="mt-1.5 size-5 accent-accent"
                 checked={kind === option.value}
                 onChange={() => setKind(option.value)}
               />
@@ -202,7 +202,7 @@ export default function GuidedForm({ notice, onDone }: Props) {
                 required
                 type="radio"
                 name="gstin"
-                className="size-5 accent-ink"
+                className="size-5 accent-accent"
                 checked={hasGstin === answer}
                 onChange={() => setHasGstin(answer)}
               />
@@ -244,7 +244,7 @@ export default function GuidedForm({ notice, onDone }: Props) {
                 <label key={need.value} className="choice">
                   <input
                     type="checkbox"
-                    className="mt-1 size-5 shrink-0 accent-ink"
+                    className="mt-1 size-5 shrink-0 accent-accent"
                     checked={needs.includes(need.value)}
                     onChange={() => toggleNeed(need.value)}
                   />
@@ -269,7 +269,7 @@ export default function GuidedForm({ notice, onDone }: Props) {
       </label>
 
       {error && (
-        <p role="alert" className="border-l-4 border-ink pl-3 font-semibold">
+        <p role="alert" className="notice-error font-medium">
           {error}
         </p>
       )}
@@ -277,7 +277,7 @@ export default function GuidedForm({ notice, onDone }: Props) {
       <button
         type="submit"
         disabled={isBusy}
-        className="w-full bg-ink px-6 py-3 text-lg font-semibold text-paper disabled:opacity-60 sm:w-auto"
+        className="w-full bg-accent px-6 py-3 text-lg font-semibold text-white disabled:opacity-60 sm:w-auto"
       >
         {t(isBusy ? 'Preparing your bundle…' : 'See my bundle')}
       </button>

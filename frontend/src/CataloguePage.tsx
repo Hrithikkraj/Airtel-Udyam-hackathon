@@ -50,11 +50,11 @@ function ProductRow({ product, allProducts, quantity, onChange }: RowProps) {
   const needs = conditions(product, allProducts)
   const isInPlan = quantity > 0
   return (
-    <li className={`py-4 ${isInPlan ? '-mx-3 border-l-4 border-marigold bg-white px-3' : ''}`}>
+    <li className={`py-4 ${isInPlan ? '-mx-3 rounded-lg bg-accent-soft px-3' : ''}`}>
       {/* The dotted line between name and price is the look of a shop's rate list. */}
       <div className="flex items-baseline gap-2">
         <h3 className="text-lg leading-snug font-semibold">{product.name}</h3>
-        <span aria-hidden="true" className="min-w-4 flex-1 border-b-2 border-dotted border-rule" />
+        <span aria-hidden="true" className="min-w-4 flex-1 border-b border-dotted border-field" />
         <p className="font-display text-lg font-semibold whitespace-nowrap tabular-nums">
           {rupees(product.price_min_inr)}–{rupees(product.price_max_inr)}
         </p>
@@ -64,7 +64,7 @@ function ProductRow({ product, allProducts, quantity, onChange }: RowProps) {
       </p>
       <p className="mt-1 max-w-[62ch]">{product.description}</p>
       <p className="mt-1 max-w-[62ch] text-sm text-muted">{buyingFacts(product)}</p>
-      {needs.length > 0 && <p className="mt-2 max-w-[62ch] border-l-4 border-marigold pl-2 text-sm">{needs.join('. ')}.</p>}
+      {needs.length > 0 && <p className="note mt-2 max-w-[62ch] text-sm">{needs.join('. ')}.</p>}
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
         {isInPlan ? (
@@ -77,7 +77,7 @@ function ProductRow({ product, allProducts, quantity, onChange }: RowProps) {
               <button
                 type="button"
                 aria-label={`${t('Fewer')} ${product.name}`}
-                className="size-9 border-2 border-ink font-bold"
+                className="size-9 border border-field font-semibold"
                 onClick={() => onChange(quantity - 1)}
               >
                 −
@@ -88,13 +88,13 @@ function ProductRow({ product, allProducts, quantity, onChange }: RowProps) {
               <button
                 type="button"
                 aria-label={`${t('More')} ${product.name}`}
-                className="size-9 border-2 border-ink font-bold"
+                className="size-9 border border-field font-semibold"
                 onClick={() => onChange(quantity + 1)}
               >
                 +
               </button>
             </span>
-            <button type="button" className="text-sm font-semibold underline underline-offset-4" onClick={() => onChange(0)}>
+            <button type="button" className="text-sm font-medium text-accent underline underline-offset-4" onClick={() => onChange(0)}>
               {t('Remove')}
             </button>
           </>
@@ -102,7 +102,7 @@ function ProductRow({ product, allProducts, quantity, onChange }: RowProps) {
           <button
             type="button"
             aria-label={`${t('Add to my plan')}: ${product.name}`}
-            className="border-2 border-ink px-4 py-1.5 font-semibold hover:bg-ink hover:text-paper"
+            className="rounded-lg border border-accent px-4 py-1.5 font-medium text-accent hover:bg-accent-soft"
             onClick={() => onChange(1)}
           >
             + {t('Add to my plan')}
@@ -157,11 +157,11 @@ export default function CataloguePage({ plan, onPlanChange, onReviewed }: Props)
   return (
     <>
       {categories.length > 0 && (
-        <nav aria-label={t('Product types')} className="sticky top-0 z-10 border-b border-rule bg-paper">
-          <ul className="mx-auto flex max-w-3xl gap-5 overflow-x-auto px-4 py-3 whitespace-nowrap">
+        <nav aria-label={t('Product types')} className="sticky top-0 z-10 mt-4 border-b border-rule bg-paper/95 backdrop-blur">
+          <ul className="mx-auto flex max-w-3xl gap-2 overflow-x-auto px-4 py-3 whitespace-nowrap">
             {categories.map((category) => (
               <li key={category}>
-                <button type="button" className="font-semibold underline underline-offset-4" onClick={() => jumpTo(category)}>
+                <button type="button" className="rounded-full border border-field bg-white px-3 py-1 text-sm font-medium hover:border-accent hover:text-accent" onClick={() => jumpTo(category)}>
                   {category}
                 </button>
               </li>
@@ -183,11 +183,11 @@ export default function CataloguePage({ plan, onPlanChange, onReviewed }: Props)
           <p className="py-8">{t('The rate list is empty. In the backend folder, run python -m app.import_data, then reload this page.')}</p>
         )}
 
-        {products.length > 0 && <p className="mt-6 max-w-[62ch]">{t('Pick the services you want, then review your plan to see your exact price.')}</p>}
+        {products.length > 0 && <p className="mt-2 max-w-[62ch] text-muted">{t('Pick the services you want, then review your plan to see your exact price.')}</p>}
 
         {categories.map((category) => (
-          <section key={category} id={sectionId(category)} className="mt-10 scroll-mt-16">
-            <h2 className="border-b-4 border-ink font-display text-2xl font-bold sm:text-3xl">{category}</h2>
+          <section key={category} id={sectionId(category)} className="panel mt-6 scroll-mt-16">
+            <h2 className="section-title">{category}</h2>
             <ul className="divide-y divide-rule">
               {products
                 .filter((product) => product.category === category)
@@ -205,7 +205,7 @@ export default function CataloguePage({ plan, onPlanChange, onReviewed }: Props)
         ))}
 
         {chosen.length > 0 && (
-          <div className="sticky bottom-0 -mx-4 mt-8 border-t-4 border-ink bg-paper px-4 py-3">
+          <div className="sticky-bar sticky bottom-0 -mx-4 mt-8 px-4 py-3">
             {isReviewing ? (
               <PlanReview
                 plan={plan}
@@ -216,14 +216,14 @@ export default function CataloguePage({ plan, onPlanChange, onReviewed }: Props)
             ) : (
               <div className="flex items-center justify-between gap-3">
                 <div aria-live="polite">
-                  <p className="font-display text-xl leading-tight font-bold tabular-nums">
+                  <p className="font-display text-xl leading-tight font-semibold tabular-nums">
                     {t('About')} {rupees(estimate)} {t('a month')}
                   </p>
                   <p className="text-sm text-muted">
                     {chosen.length} {t(chosen.length === 1 ? 'service in your plan' : 'services in your plan')}
                   </p>
                 </div>
-                <button type="button" className="shrink-0 bg-ink px-4 py-3 font-semibold text-paper" onClick={() => setIsReviewing(true)}>
+                <button type="button" className="shrink-0 bg-accent px-4 py-3 font-semibold text-white" onClick={() => setIsReviewing(true)}>
                   {t('Review my plan')}
                 </button>
               </div>

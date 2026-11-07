@@ -1,13 +1,25 @@
 @import "tailwindcss";
 
-/* Our design choices. Tailwind turns these into classes like bg-marigold and font-display. */
+/* Design tokens. Tailwind turns these into classes such as bg-accent and text-muted.
+   One accent colour, used only for actions, links and "you are here".
+   Green, amber and red are used only to show a status, always as soft tints. */
 @theme {
-  --color-ink: #18244f;
-  --color-muted: #56607f;
-  --color-rule: #a9b2cd;
-  --color-paper: #f8f9fd;
-  --color-marigold: #f5b301;
-  --font-display: "Baloo 2", system-ui, sans-serif;
+  --color-ink: #1d2733; /* Main text */
+  --color-muted: #5e6977; /* Secondary text */
+  --color-rule: #dde2e8; /* Dividers and panel borders */
+  --color-field: #848e9b; /* Input and secondary button borders: 3:1 contrast, so fields stay visible */
+  --color-paper: #f4f6f8; /* Page background */
+  --color-accent: #2f5d8a; /* Actions and links */
+  --color-accent-strong: #244a70;
+  --color-accent-soft: #eaf1f8;
+  --color-success: #2f7a57;
+  --color-success-soft: #e7f3ec;
+  --color-warn: #8a5a00;
+  --color-warn-soft: #fbf3e2;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fbeaea;
+  /* One family for everything. Mukta includes Devanagari, so Hindi matches English. */
+  --font-display: "Mukta", system-ui, sans-serif;
   --font-body: "Mukta", system-ui, sans-serif;
 }
 
@@ -15,7 +27,44 @@ body {
   background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-body);
-  line-height: 1.5;
+  font-size: 1rem;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.01em;
+}
+
+/* Rounded controls everywhere, so the app feels like one piece. */
+button,
+select,
+input:not([type="checkbox"]):not([type="radio"]),
+textarea {
+  border-radius: 0.5rem;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select {
+  border-color: var(--color-field);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):hover,
+select:hover {
+  border-color: var(--color-muted);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus {
+  border-color: var(--color-accent);
+  outline: 2px solid var(--color-accent-soft);
+  outline-offset: 0;
+}
+
+input[aria-invalid="true"] {
+  border-color: var(--color-danger);
 }
 
 /* Keyboard users can always see where they are. */
@@ -25,26 +74,141 @@ select:focus-visible,
 input:focus-visible,
 summary:focus-visible,
 label:has(input:focus-visible) {
-  outline: 3px solid var(--color-ink);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
-/* Tappable choices: a whole tile is the target, and the chosen one is filled in. */
+/* Buttons filled with the accent darken a little on hover. */
+.bg-accent:hover:not(:disabled) {
+  background-color: var(--color-accent-strong);
+}
+
+/* ---------- Panels: the white surfaces content sits on ---------- */
+.panel {
+  background: white;
+  border: 1px solid var(--color-rule);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+@media (min-width: 640px) {
+  .panel {
+    padding: 1.25rem 1.5rem;
+  }
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+/* ---------- Messages: one look for each job ---------- */
+.notice,
+.notice-warn,
+.notice-error,
+.notice-success {
+  border-left: 3px solid;
+  border-radius: 0 0.5rem 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+}
+.notice {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+.notice-warn {
+  border-color: #c99a3b;
+  background: var(--color-warn-soft);
+}
+.notice-error {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+.notice-success {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+/* A product's conditions on the rate list: quieter than a message. */
+.note {
+  border-left: 2px solid var(--color-field);
+  padding-left: 0.5rem;
+  color: var(--color-muted);
+}
+
+/* ---------- Status badges ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-success {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+.badge-warn {
+  background: var(--color-warn-soft);
+  color: var(--color-warn);
+}
+.badge-danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+.badge-neutral {
+  background: var(--color-paper);
+  color: var(--color-muted);
+}
+
+/* ---------- Bars that stay at the bottom of the screen ---------- */
+.sticky-bar {
+  background: white;
+  border-top: 1px solid var(--color-rule);
+  box-shadow: 0 -4px 12px rgb(29 39 51 / 0.06);
+}
+
+/* ---------- Tappable choices: the whole tile is the target ---------- */
 .choice {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  border: 2px solid var(--color-rule);
+  border: 1px solid var(--color-field);
+  border-radius: 0.5rem;
   background: white;
   padding: 0.625rem 0.75rem;
   cursor: pointer;
 }
 .choice:hover {
-  border-color: var(--color-ink);
+  border-color: var(--color-muted);
 }
 .choice:has(input:checked) {
-  border-color: var(--color-ink);
-  box-shadow: inset 4px 0 0 var(--color-marigold);
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-accent);
+}
+
+/* ---------- Chat ---------- */
+.bubble-advisor {
+  background: white;
+  border: 1px solid var(--color-rule);
+  border-radius: 0.25rem 0.75rem 0.75rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+}
+.bubble-owner {
+  background: var(--color-accent);
+  color: white;
+  border-radius: 0.75rem 0.25rem 0.75rem 0.75rem;
+  padding: 0.5rem 0.75rem;
 }
 
 @media (prefers-reduced-motion: no-preference) {

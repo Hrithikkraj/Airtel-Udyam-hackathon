@@ -22,7 +22,13 @@ COMPLETE_TURN = {
 
 
 def chat(client, text="I run a kirana"):
-    return client.post("/api/advisor/message", json={"messages": [{"role": "user", "content": text}]})
+    # An earlier message names the city, because the advisor only keeps a city the owner typed.
+    messages = [
+        {"role": "user", "content": "My shop is in Patna"},
+        {"role": "assistant", "content": "What else can you tell me?"},
+        {"role": "user", "content": text},
+    ]
+    return client.post("/api/advisor/message", json={"messages": messages})
 
 
 @pytest.fixture
@@ -205,8 +211,78 @@ def test_llm_answer_cannot_contain_an_invented_need():
 
 
 def test_reply_that_mentions_a_price_is_replaced(client, fake_llm):
-    fake_llm({"reply": "Our fibre is only ₹1 a month! How many staff?"})
-    assert chat(client).json()["reply"] == advisor.SAFE_QUESTION
+    fake_llm({"reply": "Our fibre is only ₹1 a month! How many staff?", "city": "Patna"})
+    reply = chat(client).json()["reply"]
+    assert "₹" not in reply
+    assert reply == "What kind of business do you run? For example a shop, clinic, office or factory."
+
+
+# ---------- Answers that make no sense are not kept ----------
+
+def send(client, text, answers=None, language="English"):
+    body = {"messages": [{"role": "user", "content": text}], "preferred_language": language, "answers": answers or {}}
+    return client.post("/api/advisor/message", json=body).json()
+
+
+@pytest.mark.parametrize("place", ["america", "London", "Mars", "my shop"])
+def test_a_place_we_do_not_serve_is_refused_with_the_reason(client, fake_llm, place):
+    fake_llm({"reply": "Do you have a GSTIN?", "city": place})
+    body = send(client, place, answers={"segment": "micro", "employee_count": 2})
+    assert body["answers"]["city"] is None
+    assert f'We could not find "{place}"' in body["reply"]
+    assert body["reply"].endswith("Which city is your business in?")
+
+
+@pytest.mark.parametrize("typed, kept", [("Bangalore", "Bengaluru"), ("bombay", "Mumbai"), ("PUNE", "Pune"), ("Patna", "Patna")])
+def test_cities_we_serve_are_kept_with_their_proper_spelling(client, fake_llm, typed, kept):
+    fake_llm({"reply": "Next?", "city": typed})
+    assert send(client, typed)["answers"]["city"] == kept
+
+
+def test_another_indian_city_is_kept_when_its_state_is_given(client, fake_llm):
+    fake_llm({"reply": "Next?", "city": "Agra"})
+    body = send(client, "Agra, Uttar Pradesh")
+    assert body["answers"]["city"] == "Agra"
+
+
+def test_a_city_the_owner_never_typed_is_ignored(client, fake_llm):
+    fake_llm({"reply": "Next?", "city": "Mumbai"})
+    assert send(client, "I run a salon")["answers"]["city"] is None
+
+
+@pytest.mark.parametrize("text", ["hello", "Hi!", "namaste"])
+def test_a_greeting_gets_a_greeting_and_the_question_again(client, fake_llm, text):
+    fake_llm({"reply": "Lovely weather!"})
+    reply = send(client, text)["reply"]
+    assert reply == "Hello! What kind of business do you run? For example a shop, clinic, office or factory."
+
+
+@pytest.mark.parametrize("text", ["asdf", "what is the capital of France?", "ok", "maybe"])
+def test_a_reply_with_no_answer_is_asked_again(client, fake_llm, text):
+    fake_llm({"reply": "Paris is lovely."})
+    body = send(client, text, answers={"segment": "micro", "employee_count": 2})
+    assert body["reply"] == "Sorry, I didn't catch that. Which city is your business in?"
+
+
+def test_the_same_question_is_asked_again_in_hindi(client, fake_llm):
+    fake_llm({"reply": "x"})
+    reply = send(client, "asdf", answers={"segment": "micro"}, language="Hindi")["reply"]
+    assert reply == "माफ़ कीजिए, मैं समझ नहीं पाया। वहाँ कितने लोग काम करते हैं?"
+
+
+@pytest.mark.parametrize("field, value", [("employee_count", 0), ("employee_count", 50_000_000), ("budget_monthly_inr", 5), ("num_sites", 0)])
+def test_numbers_no_business_could_have_are_refused(client, fake_llm, field, value):
+    fake_llm({"reply": "Next?", field: value})
+    body = send(client, str(value), answers={"segment": "micro"})
+    assert body["answers"][field] is None
+    assert f'"{value}" does not look like' in body["reply"]
+
+
+def test_a_real_answer_still_moves_the_chat_on(client, fake_llm):
+    fake_llm({"reply": "Which city is your business in?", "employee_count": 2})
+    body = send(client, "2", answers={"segment": "micro"})
+    assert body["answers"]["employee_count"] == 2
+    assert body["reply"] == "Which city is your business in?"
 
 
 def test_llm_failure_falls_back_to_the_form(client, fake_llm):
@@ -227,7 +303,7 @@ def test_llm_failure_falls_back_to_the_form(client, fake_llm):
 def test_identifiers_are_hidden_before_reaching_the_llm(client, fake_llm, text):
     calls = fake_llm({"reply": "Thanks."})
     chat(client, text)
-    sent = calls[0]["messages"][0]["content"]
+    sent = calls[0]["messages"][-1]["content"]
     assert "[hidden]" in sent
     assert not any(digit in sent for digit in "0123456789")
 
@@ -349,3 +425,22 @@ def test_accepted_quote_keeps_its_price_after_a_catalogue_change(client):
 def test_recommend_api_includes_an_explanation(client):
     response = client.post("/api/bundles/recommend", json={**SHOP, "needs": ["internet"]})
     assert "Biz Fibre 100" in response.json()["explanation"]
+
+
+def test_a_city_written_in_hindi_is_kept(client, fake_llm):
+    # The owner writes in Devanagari, and the LLM records the city in English letters.
+    fake_llm({"reply": "x", "city": "Bengaluru"})
+    assert send(client, "बेंगलुरु", language="Hindi")["answers"]["city"] == "Bengaluru"
+
+
+def test_a_place_outside_india_written_in_hindi_is_still_refused(client, fake_llm):
+    fake_llm({"reply": "x", "city": "London"})
+    body = send(client, "लंदन", answers={"segment": "micro", "employee_count": 2}, language="Hindi")
+    assert body["answers"]["city"] is None
+    assert body["reply"].startswith('हमें "London" उन शहरों में नहीं मिला')
+    assert body["reply"].endswith("आपका व्यवसाय किस शहर में है?")
+
+
+def test_a_state_named_in_hindi_lets_another_city_through(client, fake_llm):
+    fake_llm({"reply": "x", "city": "Agra"})
+    assert send(client, "आगरा, उत्तर प्रदेश", language="Hindi")["answers"]["city"] == "Agra"

@@ -269,7 +269,7 @@ export default function App() {
           ) : (
             <>
               {authNotice && (
-                <p role="status" className="mt-6 border-l-4 border-marigold bg-white px-3 py-2 font-semibold">
+                <p role="status" className="notice mt-6 font-medium">
                   {authNotice}
                 </p>
               )}
@@ -345,7 +345,7 @@ export default function App() {
           {(screen === 'signin' || screen === 'signup') && (
             <div className="py-8">
               <p>{t('You are signed in.')}</p>
-              <button type="button" className="mt-3 bg-ink px-6 py-3 font-semibold text-paper" onClick={() => goTo(homeScreen)}>
+              <button type="button" className="mt-3 bg-accent px-6 py-3 font-semibold text-white" onClick={() => goTo(homeScreen)}>
                 {t('Find the right bundle')}
               </button>
             </div>
@@ -370,13 +370,13 @@ export default function App() {
           <p className="mx-auto flex max-w-3xl flex-wrap gap-x-6 gap-y-2 px-4 py-5">
             <button
               type="button"
-              className="font-semibold underline underline-offset-4"
+              className="font-medium text-accent underline underline-offset-4"
               onClick={() => (screen === 'catalogue' ? goBack() : goTo('catalogue'))}
             >
               {t(screen === 'catalogue' ? 'Find the right bundle' : 'See the full rate list')}
             </button>
             {session && screen !== 'order' && (
-              <button type="button" className="font-semibold underline underline-offset-4" onClick={() => goTo('order')}>
+              <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={() => goTo('order')}>
                 {t('Track my order')}
               </button>
             )}

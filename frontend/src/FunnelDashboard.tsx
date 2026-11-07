@@ -46,7 +46,7 @@ function Bar({ share, isHighlighted = false }: { share: number; isHighlighted?: 
   return (
     <div className="h-3 rounded-r bg-transparent">
       <div
-        className={`h-full rounded-r ${isHighlighted ? 'bg-ink' : 'bg-rule'}`}
+        className={`h-full rounded-r ${isHighlighted ? 'bg-accent' : 'bg-field'}`}
         style={{ width: `${Math.max(share, 0.5)}%` }}
       />
     </div>
@@ -55,8 +55,8 @@ function Bar({ share, isHighlighted = false }: { share: number; isHighlighted?: 
 
 function Tile({ value, label, target }: { value: string; label: string; target?: string }) {
   return (
-    <div className="border-t-4 border-ink pt-2">
-      <p className="font-display text-3xl leading-tight font-bold tabular-nums">{value}</p>
+    <div className="panel">
+      <p className="font-display text-3xl leading-tight font-semibold tabular-nums">{value}</p>
       <p className="leading-snug">{label}</p>
       {target && <p className="text-sm text-muted">{target}</p>}
     </div>
@@ -67,11 +67,11 @@ function GroupTable({ title, groups }: { title: string; groups: Group[] }) {
   const highest = Math.max(...groups.map((group) => group.activation_pct))
   return (
     <section className="mt-10">
-      <h2 className="font-display text-2xl font-bold">{title}</h2>
+      <h2 className="font-display text-2xl font-semibold">{title}</h2>
       <div className="mt-2 overflow-x-auto">
         <table className="w-full min-w-[34rem] text-left">
           <thead>
-            <tr className="border-b-4 border-ink text-sm">
+            <tr className="border-b border-rule text-sm text-muted">
               <th scope="col" className="py-1 pr-3 font-semibold">{title.replace('By ', '').replace(/^./, (c) => c.toUpperCase())}</th>
               <th scope="col" className="w-40 py-1 pr-3 font-semibold">Activated</th>
               <th scope="col" className="py-1 pr-3 text-right font-semibold">Cost per activation</th>
@@ -126,7 +126,7 @@ export default function FunnelDashboard({ funnel }: { funnel: Funnel }) {
       </section>
 
       <section className="mt-10">
-        <h2 className="font-display text-2xl font-bold">Where leads are lost</h2>
+        <h2 className="font-display text-2xl font-semibold">Where leads are lost</h2>
         <ol className="mt-3 space-y-3">
           {stages.map((stage) => (
             <li key={stage.stage} title={stage.lost ? `${stage.lost.toLocaleString('en-IN')} lost at this step` : undefined}>
@@ -149,13 +149,13 @@ export default function FunnelDashboard({ funnel }: { funnel: Funnel }) {
       <GroupTable title="By lead source" groups={funnel.by_source} />
 
       <section className="mt-10">
-        <h2 className="font-display text-2xl font-bold">Why leads drop</h2>
+        <h2 className="font-display text-2xl font-semibold">Why leads drop</h2>
         <div className="mt-3 grid gap-x-8 gap-y-6 sm:grid-cols-2">
           {funnel.drop_reasons.map((row) => {
             const biggest = row.reasons[0].count
             return (
               <div key={row.stage}>
-                <h3 className="border-b-2 border-ink font-semibold">
+                <h3 className="border-b-2 border-field font-semibold">
                   Stopped at {row.stage.replace("KYC", "@").toLowerCase().replace("@", "KYC")} <span className="font-normal text-muted tabular-nums">{row.total.toLocaleString('en-IN')}</span>
                 </h3>
                 <ul className="mt-2 space-y-2">
@@ -176,11 +176,11 @@ export default function FunnelDashboard({ funnel }: { funnel: Funnel }) {
       </section>
 
       <section className="mt-10 grid gap-x-8 gap-y-4 sm:grid-cols-2">
-        <p className="border-l-4 border-marigold pl-3">
+        <p className="notice">
           <span className="font-semibold">{funnel.bundles_breaking_rules} of {funnel.activated_bundles} sold bundles</span> broke a catalogue
           rule. The new rules engine refuses these.
         </p>
-        <p className="border-l-4 border-marigold pl-3">
+        <p className="notice">
           <span className="font-semibold">Lead score, tested on {funnel.score_quality.test_leads.toLocaleString('en-IN')} unseen leads:</span> its
           top fifth holds {funnel.score_quality.top_fifth_share_of_activations_pct}% of activations (AUC {funnel.score_quality.auc}).
         </p>

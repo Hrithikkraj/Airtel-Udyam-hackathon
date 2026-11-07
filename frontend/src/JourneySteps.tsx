@@ -15,40 +15,40 @@ type Props = {
   onOpen: (step: StepKey) => void
 }
 
-// Shows where the owner is in the journey. Steps already reached can be opened again.
+// Where the owner is in the journey. Steps already reached can be opened again.
 export default function JourneySteps({ current, canOpen, onOpen }: Props) {
   const { t } = useLanguage()
+  const currentIndex = STEPS.findIndex((step) => step.key === current)
   return (
-    <nav aria-label={t('Your progress')} className="border-b border-rule bg-paper">
-      <ol className="mx-auto flex max-w-3xl gap-0.5 px-3 py-2 text-sm sm:gap-3 sm:px-4 sm:text-base">
+    <nav aria-label={t('Your progress')} className="mx-auto w-full max-w-3xl px-4 pt-4">
+      <ol className="flex items-center gap-1 text-sm sm:gap-2">
         {STEPS.map((step, index) => {
           const isCurrent = step.key === current
+          const isPast = index < currentIndex
           const isOpenable = !isCurrent && canOpen(step.key)
           const number = (
             <span
-              className={`flex size-5 shrink-0 items-center justify-center text-xs font-bold sm:size-6 sm:text-sm ${
-                isCurrent ? 'bg-ink text-paper' : isOpenable ? 'border-2 border-ink' : 'border-2 border-rule text-muted'
+              className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                isCurrent ? 'bg-accent text-white' : isOpenable || isPast ? 'bg-accent-soft text-accent' : 'border border-field text-muted'
               }`}
             >
               {index + 1}
             </span>
           )
           return (
-            <li key={step.key} className="flex min-w-0 flex-1 items-center sm:flex-none">
+            <li key={step.key} className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
               {isOpenable ? (
-                <button type="button" className="flex items-center gap-1 py-1 font-semibold underline underline-offset-4 sm:gap-1.5" onClick={() => onOpen(step.key)}>
+                <button type="button" className="flex items-center gap-1.5 rounded-md py-1 font-medium text-accent hover:underline" onClick={() => onOpen(step.key)}>
                   {number}
                   {t(step.label)}
                 </button>
               ) : (
-                <span
-                  aria-current={isCurrent ? 'step' : undefined}
-                  className={`flex items-center gap-1 py-1 sm:gap-1.5 ${isCurrent ? 'font-semibold' : 'text-muted'}`}
-                >
+                <span aria-current={isCurrent ? 'step' : undefined} className={`flex items-center gap-1.5 py-1 ${isCurrent ? 'font-semibold' : 'text-muted'}`}>
                   {number}
                   {t(step.label)}
                 </span>
               )}
+              {index < STEPS.length - 1 && <span aria-hidden="true" className="h-px min-w-2 flex-1 bg-rule" />}
             </li>
           )
         })}

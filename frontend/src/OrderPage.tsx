@@ -60,7 +60,7 @@ export default function OrderPage({ orderId, onVerify, onStartAgain }: Props) {
     return (
       <div className="py-8">
         <p role="alert">{error}</p>
-        <button type="button" className="mt-4 font-semibold underline underline-offset-4" onClick={onStartAgain}>
+        <button type="button" className="mt-4 font-medium text-accent underline underline-offset-4" onClick={onStartAgain}>
           {t('Start a new bundle')}
         </button>
       </div>
@@ -70,16 +70,16 @@ export default function OrderPage({ orderId, onVerify, onStartAgain }: Props) {
   return (
     <div className="py-8">
       <p className="text-sm text-muted">{t('Order')} {order.order_id}</p>
-      <h2 aria-live="polite" className="font-display text-3xl leading-tight font-bold">{t(order.status_label)}</h2>
+      <h2 aria-live="polite" className="font-display text-2xl leading-tight font-semibold">{t(order.status_label)}</h2>
 
       {/* What happens next comes first, because that is why the owner opened this page. */}
-      <section className={`mt-4 p-4 ${order.status === 'activated' ? 'bg-ink text-paper' : 'border-4 border-ink'}`}>
+      <section className={`mt-4 ${order.status === 'activated' ? 'notice-success p-4' : 'panel border-accent'}`}>
         <p className="text-lg">{t(order.next_step)}</p>
         {order.expected_activation && order.status !== 'activated' && order.status !== 'cancelled' && (
           <p className="mt-1 font-semibold">{t('Expected by')} {shortDate(order.expected_activation)}</p>
         )}
         {order.next_action === 'verify' && (
-          <button type="button" className="mt-3 w-full bg-ink px-6 py-3 font-semibold text-paper sm:w-auto" onClick={onVerify}>
+          <button type="button" className="mt-3 w-full bg-accent px-6 py-3 font-semibold text-white sm:w-auto" onClick={onVerify}>
             {t(order.status === 'quote_confirmed' ? 'Verify my business' : 'Go to my documents')}
           </button>
         )}
@@ -93,7 +93,7 @@ export default function OrderPage({ orderId, onVerify, onStartAgain }: Props) {
             <button
               type="button"
               disabled={isBusy}
-              className="mt-3 w-full bg-ink px-6 py-3 font-semibold text-paper disabled:opacity-60 sm:w-auto"
+              className="mt-3 w-full bg-accent px-6 py-3 font-semibold text-white disabled:opacity-60 sm:w-auto"
               onClick={() => run(placeOrder)}
             >
               {t('Place my order')}
@@ -103,22 +103,22 @@ export default function OrderPage({ orderId, onVerify, onStartAgain }: Props) {
       </section>
 
       {error && (
-        <p role="alert" className="mt-4 border-l-4 border-marigold pl-3 font-semibold">{error}</p>
+        <p role="alert" className="notice-error mt-4 font-medium">{error}</p>
       )}
 
-      <section className="mt-8">
-        <h2 className="border-b-4 border-ink font-display text-2xl font-bold">{t('Progress')}</h2>
+      <section className="panel mt-6">
+        <h2 className="section-title">{t('Progress')}</h2>
         <ol className="mt-3">
           {order.steps.map((step, index) => (
             <li key={step.label} className="flex gap-3" aria-current={step.state === 'current' ? 'step' : undefined}>
               <div className="flex flex-col items-center">
                 <span
-                  className={`flex size-8 shrink-0 items-center justify-center font-display font-bold ${
+                  className={`flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
                     step.state === 'done'
-                      ? 'bg-ink text-paper'
+                      ? 'bg-accent text-white'
                       : step.state === 'current'
-                        ? 'bg-marigold text-ink'
-                        : 'border-2 border-rule text-muted'
+                        ? 'bg-accent-soft text-accent ring-1 ring-accent'
+                        : 'border border-rule text-muted'
                   }`}
                 >
                   {step.state === 'done' ? '✓' : index + 1}
@@ -135,12 +135,12 @@ export default function OrderPage({ orderId, onVerify, onStartAgain }: Props) {
       </section>
 
       {order.demo_mode && (order.status === 'installation_scheduled' || order.status === 'installation_in_progress') && (
-        <section className="mt-2 border-2 border-dashed border-rule p-3">
+        <section className="mt-4 rounded-lg border border-dashed border-field bg-white p-3">
           <p className="text-sm text-muted">Demo only: stands in for the installation partner.</p>
           <button
             type="button"
             disabled={isBusy}
-            className="mt-2 border-2 border-ink px-4 py-2 font-semibold disabled:opacity-60"
+            className="mt-2 border border-field px-4 py-2 font-semibold disabled:opacity-60"
             onClick={() => run(advanceDemoOrder)}
           >
             {order.status === 'installation_scheduled' ? 'Start installation' : 'Finish installation and activate'}
@@ -148,8 +148,8 @@ export default function OrderPage({ orderId, onVerify, onStartAgain }: Props) {
         </section>
       )}
 
-      <section className="mt-8">
-        <h2 className="border-b-4 border-ink font-display text-2xl font-bold">{t('What you ordered')}</h2>
+      <section className="panel mt-6">
+        <h2 className="section-title">{t('What you ordered')}</h2>
         <ul className="divide-y divide-rule">
           {order.lines.map((line) => (
             <li key={line.product_id} className="flex items-baseline justify-between gap-4 py-2">
@@ -158,7 +158,7 @@ export default function OrderPage({ orderId, onVerify, onStartAgain }: Props) {
             </li>
           ))}
         </ul>
-        <p className="mt-2 border-t-2 border-ink pt-2 font-display text-xl font-bold tabular-nums">
+        <p className="mt-2 border-t border-rule pt-2 font-display text-xl font-semibold tabular-nums">
           {rupees(order.monthly_total_inr)} {t('a month')}
         </p>
         <p className="text-sm text-muted">
@@ -194,12 +194,12 @@ export default function OrderPage({ orderId, onVerify, onStartAgain }: Props) {
           )
         )}
         {order.can_cancel && (
-          <button type="button" disabled={isBusy} className="font-semibold underline underline-offset-4" onClick={cancel}>
+          <button type="button" disabled={isBusy} className="font-medium text-accent underline underline-offset-4" onClick={cancel}>
             {t('Cancel this order')}
           </button>
         )}
         {(order.status === 'activated' || order.status === 'cancelled') && (
-          <button type="button" className="font-semibold underline underline-offset-4" onClick={onStartAgain}>
+          <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={onStartAgain}>
             {t('Start a new bundle')}
           </button>
         )}

@@ -7,7 +7,7 @@ export type AuthMode = 'signin' | 'signup'
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const PHONE_PATTERN = /^[6-9]\d{9}$/
 const MIN_PASSWORD = 8
-const inputStyle = 'mt-1 w-full border-2 border-ink bg-white px-3 py-2 text-lg aria-[invalid=true]:border-red-700'
+const inputStyle = 'mt-1 w-full border bg-white px-3 py-2.5 text-base'
 
 type Props = { mode: AuthMode; onDone: (account: Account) => void; onSwitch: (mode: AuthMode) => void }
 
@@ -57,13 +57,13 @@ export default function AuthPage({ mode, onDone, onSwitch }: Props) {
 
   const fieldError = (name: string) =>
     problems[name] ? (
-      <span id={`${name}-problem`} className="mt-1 block text-sm font-semibold">
+      <span id={`${name}-problem`} className="mt-1 block text-sm font-medium text-danger">
         {problems[name]}
       </span>
     ) : null
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="max-w-md space-y-5 py-8">
+    <form onSubmit={handleSubmit} noValidate className="panel my-6 max-w-md space-y-5">
       <p>{t(isSignUp ? 'Save your orders and details, and see them on any device.' : 'Welcome back. Sign in to see your orders and details.')}</p>
 
       {isSignUp && (
@@ -142,24 +142,24 @@ export default function AuthPage({ mode, onDone, onSwitch }: Props) {
           </span>
         )}
         <label className="mt-2 flex items-center gap-2 text-sm">
-          <input type="checkbox" className="size-4 accent-ink" checked={showPassword} onChange={() => setShowPassword(!showPassword)} />
+          <input type="checkbox" className="size-4 accent-accent" checked={showPassword} onChange={() => setShowPassword(!showPassword)} />
           {t('Show password')}
         </label>
       </div>
 
       {error && (
-        <p role="alert" className="border-l-4 border-ink bg-white px-3 py-2 font-semibold">
+        <p role="alert" className="notice-error font-medium">
           {error}
         </p>
       )}
 
-      <button type="submit" disabled={isBusy} className="w-full bg-ink px-6 py-3 text-lg font-semibold text-paper disabled:opacity-60">
+      <button type="submit" disabled={isBusy} className="w-full bg-accent px-6 py-3 text-lg font-semibold text-white disabled:opacity-60">
         {t(isBusy ? (isSignUp ? 'Creating your account…' : 'Signing in…') : isSignUp ? 'Create account' : 'Sign in')}
       </button>
 
       <p>
         {t(isSignUp ? 'Already have an account?' : 'New here?')}{' '}
-        <button type="button" className="font-semibold underline underline-offset-4" onClick={() => onSwitch(isSignUp ? 'signin' : 'signup')}>
+        <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={() => onSwitch(isSignUp ? 'signin' : 'signup')}>
           {t(isSignUp ? 'Sign in' : 'Create an account')}
         </button>
       </p>

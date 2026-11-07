@@ -30,7 +30,7 @@ export default function PhoneRequest({ buttonText, doneText, onSend }: Props) {
 
   if (!isOpen) {
     return (
-      <button type="button" className="font-semibold underline underline-offset-4" onClick={() => setIsOpen(true)}>
+      <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={() => setIsOpen(true)}>
         {t(buttonText)}
       </button>
     )
@@ -46,7 +46,7 @@ export default function PhoneRequest({ buttonText, doneText, onSend }: Props) {
           inputMode="numeric"
           pattern="[6-9][0-9]{9}"
           title={t('Enter a 10-digit mobile number')}
-          className="mt-1 w-full border-2 border-ink bg-white px-3 py-2 text-lg"
+          className="mt-1 w-full border bg-white px-3 py-2.5 text-base"
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
         />
@@ -55,7 +55,7 @@ export default function PhoneRequest({ buttonText, doneText, onSend }: Props) {
         {t('We use this number only to call you about this request, and delete it when the request is closed.')}
       </p>
       {error && <p role="alert" className="mt-1 font-semibold">{error}</p>}
-      <button type="submit" className="mt-2 bg-ink px-5 py-2 font-semibold text-paper">{t('Ask for a call')}</button>
+      <button type="submit" className="mt-2 bg-accent px-5 py-2 font-semibold text-white">{t('Ask for a call')}</button>
     </form>
   )
 }

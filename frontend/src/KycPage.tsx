@@ -37,10 +37,10 @@ const FIELD_LABELS: Record<string, string> = {
 }
 
 const DOCUMENT_STATUS: Record<string, { text: string; symbol: string; style: string }> = {
-  verified: { text: 'Verified', symbol: '✓', style: 'bg-ink text-paper' },
-  needs_review: { text: 'Needs review', symbol: '!', style: 'bg-marigold text-ink' },
-  failed: { text: 'Not accepted', symbol: '✕', style: 'border-2 border-ink text-ink' },
-  not_applicable: { text: 'Not needed', symbol: '–', style: 'border-2 border-rule text-muted' },
+  verified: { text: 'Verified', symbol: '✓', style: 'badge badge-success' },
+  needs_review: { text: 'Needs review', symbol: '!', style: 'badge badge-warn' },
+  failed: { text: 'Not accepted', symbol: '✕', style: 'badge badge-danger' },
+  not_applicable: { text: 'Not needed', symbol: '–', style: 'badge badge-neutral' },
 }
 
 const OVERALL_MESSAGE: Record<string, { title: string; text: string }> = {
@@ -114,15 +114,15 @@ export default function KycPage({ businessId, hasGstin, onBack }: Props) {
     if (hasDeclined) {
       return (
         <div className="py-8">
-          <h2 className="font-display text-2xl font-bold">{t('We have not read any documents')}</h2>
+          <h2 className="font-display text-2xl font-semibold">{t('We have not read any documents')}</h2>
           <p className="mt-2 max-w-[62ch]">
             {t('Your quote is saved, but we cannot activate your order without verifying your business. You can agree when you are ready, or ask our team about other ways to verify.')}
           </p>
           <div className="mt-6 flex flex-wrap gap-4">
-            <button type="button" className="bg-ink px-6 py-3 font-semibold text-paper" onClick={() => setHasDeclined(false)}>
+            <button type="button" className="bg-accent px-6 py-3 font-semibold text-white" onClick={() => setHasDeclined(false)}>
               {t('Read the notice again')}
             </button>
-            <button type="button" className="font-semibold underline underline-offset-4" onClick={onBack}>
+            <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={onBack}>
               {t(BACK_BUTTON_TEXT)}
             </button>
           </div>
@@ -130,23 +130,23 @@ export default function KycPage({ businessId, hasGstin, onBack }: Props) {
       )
     }
     return (
-      <div className="py-8">
-        <h2 className="font-display text-2xl font-bold">{t('Before you upload')}</h2>
+      <div className="panel my-6">
+        <h2 className="font-display text-xl font-semibold">{t('Before you upload')}</h2>
         <ul className="mt-3 max-w-[62ch] space-y-3">
           {notice.points.map((point) => (
-            <li key={point} className="border-l-4 border-marigold pl-3">{t(point)}</li>
+            <li key={point} className="flex gap-2"><span aria-hidden="true" className="text-accent">✓</span><span>{t(point)}</span></li>
           ))}
         </ul>
         {error && <p role="alert" className="mt-4 font-semibold">{error}</p>}
         <div className="mt-6 flex flex-wrap items-center gap-4">
           <button
             type="button"
-            className="bg-ink px-6 py-3 font-semibold text-paper"
+            className="bg-accent px-6 py-3 font-semibold text-white"
             onClick={() => runAction(() => giveKycConsent(businessId, notice.version))}
           >
             {t('I agree, continue')}
           </button>
-          <button type="button" className="font-semibold underline underline-offset-4" onClick={() => setHasDeclined(true)}>
+          <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={() => setHasDeclined(true)}>
             {t('Not now')}
           </button>
         </div>
@@ -162,21 +162,21 @@ export default function KycPage({ businessId, hasGstin, onBack }: Props) {
 
   return (
     <div className="py-8">
-      <ul className="divide-y divide-rule border-y-4 border-ink">
+      <ul className="space-y-3">
         {slots.map((slot) => {
           const document = documentFor(slot.type)
           const badge = document && DOCUMENT_STATUS[document.status]
           const isBusy = busySlot === slot.type
           return (
-            <li key={slot.type} className="py-4">
+            <li key={slot.type} className="panel">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h2 className="font-display text-xl font-bold">{t(slot.label)}</h2>
+                  <h2 className="font-display text-lg font-semibold">{t(slot.label)}</h2>
                   {!document && <p className="text-sm text-muted">{t(slot.hint)}</p>}
                   {!document && <p className="text-sm text-muted">{t('Photo or PDF, up to 15 MB.')}</p>}
                 </div>
                 {badge && (
-                  <span className={`flex items-center gap-1.5 px-2 py-0.5 text-sm font-semibold whitespace-nowrap ${badge.style}`}>
+                  <span className={badge.style}>
                     <span aria-hidden="true">{badge.symbol}</span>
                     {t(badge.text)}
                   </span>
@@ -184,7 +184,7 @@ export default function KycPage({ businessId, hasGstin, onBack }: Props) {
               </div>
 
               {document && document.reasons.length > 0 && (
-                <ul className="mt-2 space-y-1 border-l-4 border-marigold pl-3">
+                <ul className={`mt-2 space-y-1 ${document.status === 'failed' ? 'notice-error' : 'notice-warn'}`}>
                   {document.reasons.map((reason) => (
                     <li key={reason}>{reason}.</li>
                   ))}
@@ -203,12 +203,12 @@ export default function KycPage({ businessId, hasGstin, onBack }: Props) {
               )}
 
               {slotErrors[slot.type] && (
-                <p role="alert" className="mt-2 border-l-4 border-ink pl-3 font-semibold">{slotErrors[slot.type]}</p>
+                <p role="alert" className="notice-error mt-2 font-medium">{slotErrors[slot.type]}</p>
               )}
 
               <div className="mt-3 flex flex-wrap items-center gap-4">
                 <label
-                  className={`cursor-pointer border-2 border-ink px-4 py-2 font-semibold has-focus-visible:outline-3 ${isBusy ? 'opacity-60' : ''}`}
+                  className={`cursor-pointer border border-field px-4 py-2 font-semibold has-focus-visible:outline-3 ${isBusy ? 'opacity-60' : ''}`}
                 >
                   {t(isBusy ? 'Reading your document…' : document ? 'Upload again' : 'Upload')}
                   <input
@@ -223,7 +223,7 @@ export default function KycPage({ businessId, hasGstin, onBack }: Props) {
                 {slot.type === 'udyam_certificate' && (!document || document.status === 'needs_review') && (
                   <button
                     type="button"
-                    className="text-sm font-semibold underline underline-offset-4"
+                    className="text-sm font-medium text-accent underline underline-offset-4"
                     onClick={() => runAction(() => declareNoUdyam(businessId))}
                   >
                     {t('My business has no Udyam registration')}
@@ -236,15 +236,15 @@ export default function KycPage({ businessId, hasGstin, onBack }: Props) {
       </ul>
 
       {status.review_note && (
-        <section className="mt-6 border-l-4 border-ink pl-3">
-          <h2 className="font-display text-xl font-bold">{t('A note from our team')}</h2>
+        <section className="notice mt-6">
+          <h2 className="font-display text-xl font-semibold">{t('A note from our team')}</h2>
           <p className="mt-1">{status.review_note}</p>
         </section>
       )}
 
       {status.problems_across_documents.length > 0 && (
-        <section className="mt-6 border-l-4 border-marigold pl-3">
-          <h2 className="font-display text-xl font-bold">{t('These documents do not agree')}</h2>
+        <section className="notice-warn mt-6">
+          <h2 className="font-display text-xl font-semibold">{t('These documents do not agree')}</h2>
           <ul className="mt-1 space-y-1">
             {status.problems_across_documents.map((problem) => (
               <li key={problem}>{problem}.</li>
@@ -255,8 +255,8 @@ export default function KycPage({ businessId, hasGstin, onBack }: Props) {
 
       <div aria-live="polite" className="mt-6">
         {overall ? (
-          <section className={status.status === 'verified' ? 'bg-ink p-4 text-paper' : 'border-4 border-ink p-4'}>
-            <h2 className="font-display text-2xl font-bold">{t(overall.title)}</h2>
+          <section className={status.status === 'verified' ? 'notice-success p-4' : status.status === 'failed' ? 'notice-error p-4' : 'notice-warn p-4'}>
+            <h2 className="font-display text-2xl font-semibold">{t(overall.title)}</h2>
             <p className="mt-1">{t(overall.text)}</p>
           </section>
         ) : (
@@ -270,8 +270,8 @@ export default function KycPage({ businessId, hasGstin, onBack }: Props) {
         type="button"
         className={
           status.status === 'verified'
-            ? 'mt-6 w-full bg-ink px-6 py-3 text-lg font-semibold text-paper sm:w-auto'
-            : 'mt-6 font-semibold underline underline-offset-4'
+            ? 'mt-6 w-full bg-accent px-6 py-3 text-lg font-semibold text-white sm:w-auto'
+            : 'mt-6 font-medium text-accent underline underline-offset-4'
         }
         onClick={onBack}
       >
@@ -280,7 +280,7 @@ export default function KycPage({ businessId, hasGstin, onBack }: Props) {
 
       <p className="mt-6 text-sm text-muted">
         {t('We do not keep your images, and ID numbers are masked.')}{' '}
-        <button type="button" className="font-semibold underline underline-offset-4" onClick={withdraw}>
+        <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={withdraw}>
           {t('Withdraw consent and delete my details')}
         </button>
       </p>

@@ -5,7 +5,7 @@ import { useLanguage } from './i18n'
 // Cities outside our list count as tier 2, the same rule the backend uses.
 const OTHER_CITY = 'other'
 const OTHER_CITY_TIER = 2
-const inputStyle = 'mt-1 w-full border-2 border-ink bg-white px-3 py-2'
+const inputStyle = 'mt-1 w-full border bg-white px-3 py-2'
 
 type Props = {
   plan: Record<string, number>
@@ -68,7 +68,7 @@ export default function PlanReview({ plan, products, onCancel, onReviewed }: Pro
 
   return (
     <form onSubmit={handleSubmit} noValidate className="max-h-[70vh] overflow-y-auto">
-      <h2 className="font-display text-xl font-bold">{t('A few details to check your plan')}</h2>
+      <h2 className="font-display text-lg font-semibold">{t('A few details to check your plan')}</h2>
       <p className="text-sm text-muted">{t('Some services depend on your city, size and GSTIN.')}</p>
       <div className="mt-3 grid grid-cols-2 gap-3">
         <label className="col-span-2 block font-semibold sm:col-span-1">
@@ -96,7 +96,7 @@ export default function PlanReview({ plan, products, onCancel, onReviewed }: Pro
           <div className="mt-1 grid max-w-xs grid-cols-2 gap-2">
             {['yes', 'no'].map((answer) => (
               <label key={answer} className="choice items-center font-semibold">
-                <input type="radio" name="plan-gstin" className="size-5 accent-ink" checked={hasGstin === answer} onChange={() => setHasGstin(answer)} />
+                <input type="radio" name="plan-gstin" className="size-5 accent-accent" checked={hasGstin === answer} onChange={() => setHasGstin(answer)} />
                 {t(answer)}
               </label>
             ))}
@@ -105,7 +105,7 @@ export default function PlanReview({ plan, products, onCancel, onReviewed }: Pro
       </div>
 
       {problems.length > 0 && (
-        <ul role="alert" className="mt-3 space-y-1 border-l-4 border-ink bg-white px-3 py-2 font-semibold">
+        <ul role="alert" className="notice-error mt-3 space-y-1 font-medium">
           {problems.map((problem) => (
             <li key={problem}>{t(problem)}</li>
           ))}
@@ -113,10 +113,10 @@ export default function PlanReview({ plan, products, onCancel, onReviewed }: Pro
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-4">
-        <button type="submit" disabled={isBusy} className="bg-ink px-5 py-3 font-semibold text-paper disabled:opacity-60">
+        <button type="submit" disabled={isBusy} className="bg-accent px-5 py-3 font-semibold text-white disabled:opacity-60">
           {t(isBusy ? 'Checking your plan…' : 'See my quote')}
         </button>
-        <button type="button" className="font-semibold underline underline-offset-4" onClick={onCancel}>
+        <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={onCancel}>
           {t('Keep choosing')}
         </button>
       </div>

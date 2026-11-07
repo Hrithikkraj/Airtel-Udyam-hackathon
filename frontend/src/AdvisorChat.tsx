@@ -48,12 +48,12 @@ export default function AdvisorChat({ onDone, onUseForm }: Props) {
   }
 
   return (
-    <div className="py-8">
+    <div className="panel my-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="font-semibold">
           {t('Language')}{' '}
           <select
-            className="ml-1 border-2 border-ink bg-white px-2 py-1 font-normal"
+            className="ml-1 border border-field bg-white px-2 py-1 font-normal"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
           >
@@ -62,13 +62,13 @@ export default function AdvisorChat({ onDone, onUseForm }: Props) {
             ))}
           </select>
         </label>
-        <button type="button" className="font-semibold underline underline-offset-4" onClick={() => onUseForm()}>
+        <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={() => onUseForm()}>
           {t('Use a short form instead')}
         </button>
       </div>
 
       <ul aria-live="polite" className="mt-6 space-y-3">
-        <li className="max-w-[85%] border-l-4 border-marigold bg-white px-3 py-2">
+        <li className="bubble-advisor max-w-[85%]">
           <span className="block text-sm font-semibold text-muted">{t('Advisor')}</span>
           {t(GREETING)}
         </li>
@@ -80,7 +80,7 @@ export default function AdvisorChat({ onDone, onUseForm }: Props) {
                 <button
                   key={example}
                   type="button"
-                  className="border-2 border-rule bg-white px-3 py-1.5 text-left hover:border-ink"
+                  className="rounded-full border border-field bg-white px-3 py-1.5 text-left text-sm hover:border-accent hover:text-accent"
                   onClick={() => setText(t(example))}
                 >
                   {t(example)}
@@ -94,8 +94,8 @@ export default function AdvisorChat({ onDone, onUseForm }: Props) {
             key={index}
             className={
               message.role === 'user'
-                ? 'ml-auto w-fit max-w-[85%] bg-ink px-3 py-2 text-paper'
-                : 'max-w-[85%] border-l-4 border-marigold bg-white px-3 py-2'
+                ? 'bubble-owner ml-auto w-fit max-w-[85%]'
+                : 'bubble-advisor max-w-[85%]'
             }
           >
             {message.content}
@@ -108,14 +108,14 @@ export default function AdvisorChat({ onDone, onUseForm }: Props) {
         <label className="flex-1">
           <span className="sr-only">{t('Your answer')}</span>
           <input
-            className="w-full border-2 border-ink bg-white px-3 py-2 text-lg"
+            className="w-full border border-field bg-white px-3 py-2 text-lg"
             value={text}
             maxLength={1000}
             onChange={(e) => setText(e.target.value)}
             placeholder={t('Type your answer')}
           />
         </label>
-        <button type="submit" disabled={isBusy} className="bg-ink px-5 py-2 font-semibold text-paper disabled:opacity-60">
+        <button type="submit" disabled={isBusy} className="bg-accent px-5 py-2 font-semibold text-white disabled:opacity-60">
           {t('Send')}
         </button>
       </form>

@@ -5,7 +5,7 @@ import { useLanguage } from './i18n'
 import { clearDeviceData, clearProfileDraft, readProfileDraft, saveProfileDraft, type BusinessDraft, type ProfileDraft } from './storage'
 
 const PHONE_PATTERN = /^[6-9]\d{9}$/
-const inputStyle = 'mt-1 w-full border-2 border-ink bg-white px-3 py-2 text-lg'
+const inputStyle = 'mt-1 w-full border bg-white px-3 py-2.5 text-base'
 
 type Status = { kind: 'saving' | 'saved' | 'error'; text: string } | null
 
@@ -127,7 +127,7 @@ export default function ProfilePage({ account, onAccountChange, onOpenOrder, onS
     current && (
       <p
         role={current.kind === 'error' ? 'alert' : 'status'}
-        className={`mt-3 font-semibold ${current.kind === 'error' ? 'border-l-4 border-ink pl-3' : current.kind === 'saved' ? 'border-l-4 border-marigold pl-3' : 'text-muted'}`}
+        className={`mt-3 font-semibold ${current.kind === 'error' ? 'notice-error' : current.kind === 'saved' ? 'notice-success' : 'text-muted'}`}
       >
         {current.kind === 'saved' && <span aria-hidden="true">✓ </span>}
         {current.text}
@@ -135,18 +135,18 @@ export default function ProfilePage({ account, onAccountChange, onOpenOrder, onS
     )
 
   return (
-    <div className="space-y-10 py-8">
+    <div className="space-y-6 py-6">
       {showRestored && (
-        <div className="border-l-4 border-marigold bg-white px-3 py-2">
+        <div className="notice">
           <p className="font-semibold">{t('We restored changes you had not saved on this device.')}</p>
-          <button type="button" className="mt-1 text-sm font-semibold underline underline-offset-4" onClick={discardDraft}>
+          <button type="button" className="mt-1 text-sm font-medium text-accent underline underline-offset-4" onClick={discardDraft}>
             {t('Discard these changes')}
           </button>
         </div>
       )}
 
-      <form onSubmit={saveDetails} noValidate>
-        <h2 className="border-b-4 border-ink font-display text-2xl font-bold">{t('Your details')}</h2>
+      <form onSubmit={saveDetails} noValidate className="panel">
+        <h2 className="section-title">{t('Your details')}</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="block font-semibold">
             {t('Your name')}
@@ -184,14 +184,14 @@ export default function ProfilePage({ account, onAccountChange, onOpenOrder, onS
             </select>
           </label>
         </div>
-        <button type="submit" disabled={status?.kind === 'saving'} className="mt-4 bg-ink px-6 py-3 font-semibold text-paper disabled:opacity-60">
+        <button type="submit" disabled={status?.kind === 'saving'} className="mt-4 bg-accent px-6 py-3 font-semibold text-white disabled:opacity-60">
           {t('Save my details')}
         </button>
         {statusLine(status)}
       </form>
 
-      <section>
-        <h2 className="border-b-4 border-ink font-display text-2xl font-bold">{t('Your businesses and orders')}</h2>
+      <section className="panel">
+        <h2 className="section-title">{t('Your businesses and orders')}</h2>
         {account.businesses.length === 0 ? (
           <p className="mt-3 text-muted">{t('No orders yet. Orders you accept while signed in will appear here.')}</p>
         ) : (
@@ -225,20 +225,20 @@ export default function ProfilePage({ account, onAccountChange, onOpenOrder, onS
                     .join(' · ')}
                 </p>
                 <p className="text-sm text-muted">{t('Size, city and GSTIN come from your quote, so they cannot be changed here.')}</p>
-                <button type="button" className="mt-3 border-2 border-ink px-4 py-2 font-semibold" onClick={() => saveBusiness(business.business_id)}>
+                <button type="button" className="mt-3 border border-field px-4 py-2 font-semibold" onClick={() => saveBusiness(business.business_id)}>
                   {t('Save business details')}
                 </button>
                 {statusLine(businessStatus[business.business_id] ?? null)}
                 <ul className="mt-4 space-y-2">
                   {business.orders.map((order) => (
-                    <li key={order.order_id} className="flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2">
+                    <li key={order.order_id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-paper px-3 py-2">
                       <span>
                         <span className="font-semibold">
                           {t('Order')} {order.order_id}
                         </span>
                         : {t(order.status_label)} · {rupees(order.monthly_total_inr)} {t('a month')}
                       </span>
-                      <button type="button" className="font-semibold underline underline-offset-4" onClick={() => onOpenOrder(business, order.order_id)}>
+                      <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={() => onOpenOrder(business, order.order_id)}>
                         {t('Open order')}
                       </button>
                     </li>
@@ -250,21 +250,21 @@ export default function ProfilePage({ account, onAccountChange, onOpenOrder, onS
         )}
       </section>
 
-      <section>
-        <h2 className="border-b-4 border-ink font-display text-2xl font-bold">{t('This device')}</h2>
+      <section className="panel">
+        <h2 className="section-title">{t('This device')}</h2>
         <p className="mt-3 max-w-[62ch]">
           {t('This browser keeps only your language, the order you are following, and changes you have not saved yet. Your password and documents are never stored here.')}
         </p>
         <div className="mt-3 flex flex-wrap gap-4">
-          <button type="button" className="border-2 border-ink px-4 py-2 font-semibold" onClick={clearThisDevice}>
+          <button type="button" className="border border-field px-4 py-2 font-semibold" onClick={clearThisDevice}>
             {t('Clear saved data on this device')}
           </button>
-          <button type="button" disabled={isSigningOut} className="bg-ink px-4 py-2 font-semibold text-paper disabled:opacity-60" onClick={signOutHere}>
+          <button type="button" disabled={isSigningOut} className="bg-accent px-4 py-2 font-semibold text-white disabled:opacity-60" onClick={signOutHere}>
             {t(isSigningOut ? 'Signing out…' : 'Sign out')}
           </button>
         </div>
         {deviceMessage && (
-          <p role="status" className="mt-3 border-l-4 border-marigold pl-3 font-semibold">
+          <p role="status" className="notice-success mt-3 font-medium">
             {deviceMessage}
           </p>
         )}
