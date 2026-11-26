@@ -7,6 +7,7 @@ from .auth import require_signed_in_owner
 from .database import get_db
 from .explain import explain, plan_explanation
 from .pricing import calculate_quote
+from .product_stats import load_peer_stats
 from .recommend import owner_chosen_plan, recommend
 from .rules import check_bundle
 from .schemas import BusinessProfile, QuoteOut, QuoteRequest, Recommendation
@@ -16,7 +17,8 @@ router = APIRouter(prefix="/api/bundles", tags=["bundles"], dependencies=[Depend
 
 @router.post("/recommend", response_model=Recommendation)
 def recommend_bundle(profile: BusinessProfile, db: Session = Depends(get_db)):
-    recommendation = recommend(profile, load_catalogue(db))
+    # Peer facts only add to the explanations. They never change what is chosen.
+    recommendation = recommend(profile, load_catalogue(db), load_peer_stats(db))
     recommendation.explanation = explain(profile, recommendation)
     return recommendation
 
@@ -38,6 +40,6 @@ def owner_plan(request: QuoteRequest, db: Session = Depends(get_db)):
     errors = check_bundle(request.items, request.profile, catalogue)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
-    recommendation = owner_chosen_plan(request.profile, request.items, catalogue)
+    recommendation = owner_chosen_plan(request.profile, request.items, catalogue, load_peer_stats(db))
     recommendation.explanation = plan_explanation(request.profile, recommendation)
     return recommendation

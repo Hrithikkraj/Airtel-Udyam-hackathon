@@ -1,7 +1,7 @@
 """The shape of the data our API accepts and sends back."""
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # Every need the advisor may send. Anything else is rejected, so the LLM cannot invent one.
 Need = Literal[
@@ -107,10 +107,47 @@ class ScoreParts(BaseModel):
     total: int
 
 
+class DetailPrice(BaseModel):
+    """One product's money, copied from calculate_quote. Nothing here is calculated a second way."""
+    unit_price_inr: int = 0
+    quantity: int = 0
+    monthly_inr: int = 0
+    setup_inr: int = 0
+    range_min_inr: int = 0
+    range_max_inr: int = 0
+    share_of_bill_pct: int = 0  # 0 when the bill total is 0.
+
+
+class OtherOption(BaseModel):
+    product_id: str
+    name: str
+    difference: str
+
+
+class Upgrade(BaseModel):
+    product_id: str
+    name: str
+    extra_monthly_inr: int
+    note: str
+
+
+class ProductDetail(BaseModel):
+    """Why we chose a product, and what the owner should know about it. Written by our own code."""
+    product_id: str = ""
+    what_you_get: str = ""  # The catalogue description, unchanged.
+    why: list[str] = []  # Most important first, at most 4.
+    good_to_know: list[str] = []
+    price: DetailPrice = DetailPrice()
+    why_not_others: list[OtherOption] = []  # Connections only, at most 2.
+    upgrade: Upgrade | None = None
+    if_removed: str | None = None
+
+
 class RecommendedBundle(BaseModel):
     quote: QuoteOut
     reasons: dict[str, str]  # product_id -> why it is in the bundle
     score: ScoreParts
+    details: dict[str, ProductDetail] = {}  # product_id -> the longer explanation
 
 
 class AddOn(BaseModel):
@@ -120,6 +157,7 @@ class AddOn(BaseModel):
     monthly_inr: int
     setup_inr: int
     reason: str
+    detail: ProductDetail | None = None
 
 
 class NotIncluded(BaseModel):
@@ -197,10 +235,24 @@ class AdvisorTurn(AdvisorAnswers):
     reply: str
     replace_needs: bool = False
     reply_only: bool = False
+    # The language of the owner's latest message, which is the language of the reply. Our code checks
+    # it (answer_checks.normalize_language), so a missing, odd or very long value is never used as is.
+    language: str = Field(
+        default="",
+        description="Full English name of the language of the reply, such as English, Hindi, Hinglish or Tamil",
+    )
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def language_is_text(cls, value):
+        # A null or a number from the LLM must not fail the whole turn. Our code treats "" as unknown.
+        return value if isinstance(value, str) else ""
 
 
 class AdvisorResponse(BaseModel):
     reply: str
     answers: AdvisorAnswers
+    # The language the chat is in now. The browser sends it back as the next hint.
+    language: str
     profile: BusinessProfile | None = None
     recommendation: Recommendation | None = None

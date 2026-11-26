@@ -1,14 +1,73 @@
 import { useState } from 'react'
 import PhoneRequest from './PhoneRequest'
+import ProductDetailPanel from './ProductDetailPanel'
 import { useLanguage } from './i18n'
-import { priceBundle, requestCallback, saveQuote, type BundleItem, type Profile, type Quote, type Recommendation, type RecommendedBundle, type SavedQuote } from './api'
+import { priceBundle, requestCallback, saveQuote, type BundleItem, type ProductDetail, type Profile, type Quote, type Recommendation, type RecommendedBundle, type SavedQuote } from './api'
 import { rupees } from './format'
 
 // One product the owner can switch on or off on this page.
-type Option = { product_id: string; name: string; unit: string; quantity: number; monthly_inr: number; reason: string }
+type Option = { product_id: string; name: string; unit: string; quantity: number; monthly_inr: number; reason: string; detail?: ProductDetail }
+
+const CONNECTION_IDS = ['P01', 'P02', 'P03', 'P04', 'P05', 'P06']
 
 function itemsFrom(bundle: RecommendedBundle): BundleItem[] {
   return bundle.quote.lines.map((line) => ({ product_id: line.product_id, quantity: line.quantity }))
+}
+
+function sameItems(a: BundleItem[], b: BundleItem[]) {
+  return a.length === b.length && a.every((item) => b.some((other) => other.product_id === item.product_id && other.quantity === item.quantity))
+}
+
+function connectionOf(bundle: RecommendedBundle) {
+  return bundle.quote.lines.find((line) => CONNECTION_IDS.includes(line.product_id))
+}
+
+// One plain line under each other way to build it: what it costs compared with ours, and what changes.
+function alternativeDifference(alternative: RecommendedBundle, current: RecommendedBundle, t: (text: string) => string, hindi: boolean) {
+  const parts: string[] = []
+  const change = alternative.quote.monthly_total_inr - current.quote.monthly_total_inr
+  if (change > 0) parts.push(`${rupees(change)} ${t('more a month')}`)
+  else if (change < 0) parts.push(`${rupees(-change)} ${t('less a month')}`)
+  else parts.push(t('Same monthly price'))
+  const from = connectionOf(current)
+  const to = connectionOf(alternative)
+  if (from && to && from.product_id !== to.product_id) {
+    parts.push(hindi ? `${from.name} की जगह ${to.name}` : `Uses ${to.name} instead of ${from.name}`)
+  }
+  const leftOut = current.quote.lines
+    .filter((line) => !CONNECTION_IDS.includes(line.product_id))
+    .filter((line) => !alternative.quote.lines.some((other) => other.product_id === line.product_id))
+    .map((line) => line.name)
+  if (leftOut.length > 0) parts.push(`${t('Leaves out')} ${leftOut.join(', ')}`)
+  return `${parts.join('. ')}.`
+}
+
+// One plain sentence for each part of the score.
+function scoreSentences(bundle: RecommendedBundle, needsCount: number, hindi: boolean) {
+  const { needs_covered, size_fit } = bundle.score
+  const wanted = Math.max(1, needsCount)
+  const covered = Math.round((needs_covered / 60) * wanted)
+  const services = bundle.quote.lines.length
+  const hasConnection = Boolean(connectionOf(bundle))
+
+  let needs: string
+  if (covered >= wanted) {
+    if (hindi) needs = wanted === 1 ? 'आपकी बताई ज़रूरत पूरी होती है।' : `आपकी बताई सभी ${wanted} ज़रूरतें पूरी होती हैं।`
+    else needs = wanted === 1 ? 'Covers the one thing you asked for.' : `Covers all ${wanted} things you asked for.`
+  } else {
+    needs = hindi ? `आपकी बताई ${wanted} में से ${covered} ज़रूरतें पूरी होती हैं।` : `Covers ${covered} of the ${wanted} things you asked for.`
+  }
+
+  let size: string
+  if (!hasConnection) size = hindi ? 'आपकी ज़रूरतों के लिए इंटरनेट कनेक्शन ज़रूरी नहीं है।' : 'No internet connection is needed for what you asked for.'
+  else if (size_fit >= 30) size = hindi ? 'कनेक्शन आप जैसे व्यवसाय के लिए हमारी पहली पसंद है।' : 'The connection is our first choice for a business like yours.'
+  else if (size_fit > 0) size = hindi ? 'कनेक्शन आप जैसे व्यवसाय के लिए हमारी दूसरी पसंद है।' : 'The connection is our second choice for a business like yours.'
+  else size = hindi ? 'कनेक्शन आपके आकार के लिए हमारी आम पसंद नहीं है।' : 'The connection is not our usual match for your size.'
+
+  const simple = hindi
+    ? `कुल ${services} ${services === 1 ? 'सेवा' : 'सेवाएँ'}। कम सेवाओं से संभालना आसान रहता है।`
+    : `${services} ${services === 1 ? 'service' : 'services'} in total. Fewer services are simpler to manage.`
+  return { needs, size, simple }
 }
 
 // Everything that could be in the bundle: what we recommend, then add-ons, then other options.
@@ -18,14 +77,15 @@ function buildOptions(recommendation: Recommendation): Option[] {
     if (!options.some((existing) => existing.product_id === option.product_id)) options.push(option)
   }
   const bundles = recommendation.bundle ? [recommendation.bundle, ...recommendation.alternatives] : []
+  // An old saved quote may have no details. The page then looks exactly as it did before.
   for (const line of recommendation.bundle?.quote.lines ?? []) {
-    add({ ...line, reason: recommendation.bundle!.reasons[line.product_id] })
+    add({ ...line, reason: recommendation.bundle!.reasons[line.product_id], detail: recommendation.bundle!.details?.[line.product_id] })
   }
   for (const addon of recommendation.addons) {
-    add({ ...addon, unit: '' })
+    add({ ...addon, unit: '', detail: addon.detail ?? undefined })
   }
   for (const bundle of bundles) {
-    for (const line of bundle.quote.lines) add({ ...line, reason: bundle.reasons[line.product_id] })
+    for (const line of bundle.quote.lines) add({ ...line, reason: bundle.reasons[line.product_id], detail: bundle.details?.[line.product_id] })
   }
   return options
 }
@@ -41,7 +101,8 @@ type Props = {
 }
 
 export default function QuotePage({ profile, recommendation, city, isAccepted, onBack, onViewOrder, onSaved }: Props) {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
+  const hindi = language === 'hi'
   const bundle = recommendation.bundle
   const [items, setItems] = useState<BundleItem[]>(bundle ? itemsFrom(bundle) : [])
   const [quote, setQuote] = useState<Quote | null>(bundle ? bundle.quote : null)
@@ -99,6 +160,8 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
 
   const budget = profile.budget_monthly_inr
   const overBudgetBy = budget && quote ? quote.monthly_total_inr - budget : 0
+  const bundleUnchanged = bundle ? sameItems(items, itemsFrom(bundle)) : false
+  const score = bundle ? scoreSentences(bundle, profile.needs.length, hindi) : null
 
   return (
     <div className="pt-8">
@@ -160,6 +223,18 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
                       </span>
                     )}
                   </div>
+                  {option.detail && (
+                    <div className="ml-8">
+                      <ProductDetailPanel
+                        productId={option.product_id}
+                        name={option.name}
+                        detail={option.detail}
+                        liveLine={item ? line : undefined}
+                        billTotal={quote?.monthly_total_inr ?? 0}
+                        bundleUnchanged={bundleUnchanged}
+                      />
+                    </div>
+                  )}
                 </li>
               )
             })}
@@ -181,6 +256,7 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
                 >
                   {alternative.quote.lines.map((line) => line.name).join(' + ')}: {rupees(alternative.quote.monthly_total_inr)} {t('a month')}
                 </button>
+                {bundle && <p className="text-sm text-muted">{alternativeDifference(alternative, bundle, t, hindi)}</p>}
               </li>
             ))}
           </ul>
@@ -223,10 +299,19 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
       {bundle && recommendation.chosen_by !== 'owner' && (
         <details className="mt-8 text-sm">
           <summary className="cursor-pointer font-semibold">{t('How we chose this bundle')}</summary>
-          <ul className="mt-2 space-y-1 text-muted">
-            <li>Covers what you asked for: {bundle.score.needs_covered} of 60 points</li>
-            <li>Suits your business size: {bundle.score.size_fit} of 30 points</li>
-            <li>Simple to run: {bundle.score.simplicity} of 10 points</li>
+          <ul className="mt-2 space-y-2 text-muted">
+            <li>
+              Covers what you asked for: {bundle.score.needs_covered} of 60 points
+              {score && <span className="block text-ink">{score.needs}</span>}
+            </li>
+            <li>
+              Suits your business size: {bundle.score.size_fit} of 30 points
+              {score && <span className="block text-ink">{score.size}</span>}
+            </li>
+            <li>
+              Simple to run: {bundle.score.simplicity} of 10 points
+              {score && <span className="block text-ink">{score.simple}</span>}
+            </li>
           </ul>
         </details>
       )}

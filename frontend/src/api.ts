@@ -53,10 +53,32 @@ export type Quote = {
   install_days: number
 }
 
+// Why we chose a product, written by the server's own code. Every field may be missing in an old
+// saved response, so the page must work without it.
+export type ProductDetail = {
+  product_id: string
+  what_you_get?: string
+  why?: string[]
+  good_to_know?: string[]
+  price?: {
+    unit_price_inr: number
+    quantity: number
+    monthly_inr: number
+    setup_inr: number
+    range_min_inr: number
+    range_max_inr: number
+    share_of_bill_pct: number
+  }
+  why_not_others?: { product_id: string; name: string; difference: string }[]
+  upgrade?: { product_id: string; name: string; extra_monthly_inr: number; note: string } | null
+  if_removed?: string | null
+}
+
 export type RecommendedBundle = {
   quote: Quote
   reasons: Record<string, string>
   score: { needs_covered: number; size_fit: number; simplicity: number; total: number }
+  details?: Record<string, ProductDetail>
 }
 
 export type AddOn = {
@@ -66,6 +88,7 @@ export type AddOn = {
   monthly_inr: number
   setup_inr: number
   reason: string
+  detail?: ProductDetail | null
 }
 
 export type Recommendation = {
@@ -86,6 +109,8 @@ export type AdvisorAnswers = Record<string, unknown> & { city?: string | null }
 export type AdvisorReply = {
   reply: string
   answers: AdvisorAnswers
+  /** The language the advisor found in the owner's messages, such as "Hindi", "Hinglish" or "Tamil". */
+  language: string
   profile: Profile | null
   recommendation: Recommendation | null
 }
@@ -144,6 +169,7 @@ export function trimAdvisorMessages(messages: ChatMessage[]): ChatMessage[] {
   return messages.slice(-20).map(({ role, content }) => ({ role, content: content.slice(0, 1000) }))
 }
 
+// `language` is only a hint: the chat's language so far. The server works out the language itself.
 export const sendAdvisorMessage = (messages: ChatMessage[], language: string, answers: AdvisorAnswers) =>
   request<AdvisorReply>('/api/advisor/message', {
     messages: trimAdvisorMessages(messages),
@@ -180,6 +206,8 @@ export type KycDocument = {
   status: string
   reasons: string[]
   fields: Record<string, string>
+  // Problems with earlier documents that first appear with this one. Missing in old responses.
+  mismatches?: string[]
 }
 
 export type KycStatus = {
@@ -189,6 +217,8 @@ export type KycStatus = {
   waiting_for: string[]
   problems_across_documents: string[]
   review_note: string | null
+  // The documents needed, in order. Missing in old responses, so the page then works it out itself.
+  steps?: string[]
 }
 
 export type KycNotice = { version: string; purpose: string; points: string[] }

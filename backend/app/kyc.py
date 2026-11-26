@@ -80,6 +80,9 @@ class KycDocumentOut(BaseModel):
     status: str
     reasons: list[str]
     fields: dict[str, str]
+    # Problems between documents that first appear with this document, in step order. Each problem
+    # from problems_across_documents is shown on exactly one step. Only for display.
+    mismatches: list[str] = []
 
 
 class KycStatusOut(BaseModel):
@@ -89,6 +92,8 @@ class KycStatusOut(BaseModel):
     waiting_for: list[str]
     problems_across_documents: list[str]
     review_note: str | None = None  # From a person who reviewed the documents.
+    # The documents this business needs, in the order the page asks for them.
+    steps: list[str] = []
 
 
 class NoticeOut(BaseModel):
@@ -112,10 +117,37 @@ def required_documents(business: Business) -> list[str]:
     return [GST_CERTIFICATE, *required] if business.has_gstin == "Y" else required
 
 
+def mismatches_by_step(by_type: dict[str, KycRecord], steps: list[str]) -> dict[str, list[str]]:
+    """For each uploaded document, the cross-document problems that first appear with it.
+
+    The documents are compared in step order: first the documents up to this one, then minus what
+    the earlier documents already showed. It is worked out fresh on every status, so re-uploading an
+    earlier document moves or clears the later mismatches. It never changes what is stored.
+    """
+    # Required documents first, in step order, then anything else that was uploaded.
+    order = [*steps, *(document for document in DOCUMENT_NAMES if document not in steps)]
+    included: dict[str, dict] = {}
+    already_shown: set[str] = set()
+    result: dict[str, list[str]] = {}
+    for document_type in order:
+        record = by_type.get(document_type)
+        if record is None:
+            continue
+        # The same rule as the overall comparison: documents with no fields are left out.
+        if record.extracted_fields:
+            included[document_type] = record.extracted_fields
+        new = [problem for problem in compare_documents(included) if problem not in already_shown]
+        already_shown.update(new)
+        result[document_type] = new
+    return result
+
+
 def build_status(business: Business, db: Session) -> KycStatusOut:
     records = db.scalars(select(KycRecord).where(KycRecord.business_id == business.business_id)).all()
     by_type = {record.document_type: record for record in records}
-    waiting_for = [DOCUMENT_NAMES[d] for d in required_documents(business) if d not in by_type]
+    steps = required_documents(business)
+    waiting_for = [DOCUMENT_NAMES[d] for d in steps if d not in by_type]
+    mismatches = mismatches_by_step(by_type, steps)
 
     # Unreadable documents have no fields, so they are left out of the comparison.
     across = compare_documents({r.document_type: r.extracted_fields for r in records if r.extracted_fields})
@@ -139,6 +171,7 @@ def build_status(business: Business, db: Session) -> KycStatusOut:
         waiting_for=waiting_for,
         problems_across_documents=across,
         review_note=business.kyc_review_note,
+        steps=steps,
         documents=[
             KycDocumentOut(
                 document_type=record.document_type,
@@ -146,6 +179,7 @@ def build_status(business: Business, db: Session) -> KycStatusOut:
                 status=record.status,
                 reasons=record.reasons or [],
                 fields=record.extracted_fields or {},
+                mismatches=mismatches.get(record.document_type, []),
             )
             for record in records
         ],

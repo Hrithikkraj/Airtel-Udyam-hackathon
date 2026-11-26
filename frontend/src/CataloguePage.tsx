@@ -38,6 +38,21 @@ function conditions(product: Product, allProducts: Product[]) {
   return list
 }
 
+// Who each product is made for, from the catalogue's target_segments, in plain words.
+const SEGMENT_WORDS: Record<string, string> = {
+  micro: 'shops and small service businesses',
+  prof: 'offices such as clinics, CA firms and coaching centres',
+  multi: 'businesses with 3 or more branches',
+  mfg: 'factories and workshops',
+}
+
+function whoItSuits(product: Product, t: (text: string) => string) {
+  return product.target_segments
+    .map((segment) => SEGMENT_WORDS[segment])
+    .filter((words): words is string => Boolean(words))
+    .map((words) => t(words))
+}
+
 type RowProps = {
   product: Product
   allProducts: Product[]
@@ -48,6 +63,7 @@ type RowProps = {
 function ProductRow({ product, allProducts, quantity, onChange }: RowProps) {
   const { t } = useLanguage()
   const needs = conditions(product, allProducts)
+  const suits = whoItSuits(product, t)
   const isInPlan = quantity > 0
   return (
     <li className={`py-4 ${isInPlan ? '-mx-3 rounded-lg bg-accent-soft px-3' : ''}`}>
@@ -63,6 +79,11 @@ function ProductRow({ product, allProducts, quantity, onChange }: RowProps) {
         {t('a month')}, {product.unit}
       </p>
       <p className="mt-1 max-w-[62ch]">{product.description}</p>
+      {suits.length > 0 && (
+        <p className="mt-1 max-w-[62ch] text-sm">
+          <span className="font-semibold">{t('Who it suits:')}</span> {suits.join('; ')}.
+        </p>
+      )}
       <p className="mt-1 max-w-[62ch] text-sm text-muted">{buyingFacts(product)}</p>
       {needs.length > 0 && <p className="note mt-2 max-w-[62ch] text-sm">{needs.join('. ')}.</p>}
 

@@ -9,6 +9,9 @@ The segment defaults below come from what each segment bought in smb_leads.csv.
 """
 import math
 
+# Imported as a module, because product_details.py also reads this module's rules. Names are looked
+# up when a function runs, so the two files can load in either order.
+from . import product_details
 from .pricing import calculate_quote
 from .rules import Catalogue, ineligibility_reasons, missing_dependency
 from .schemas import (
@@ -76,22 +79,33 @@ def infer_segment(profile: BusinessProfile) -> str:
     return "micro" if profile.employee_count <= 6 else "prof"
 
 
+PER_SITE_PRODUCTS = {"P01", "P02", "P03", "P04", "P05", "P06", "P09", "P10", "P19", "P21", "P22"}
+TWO_PER_SITE_PRODUCTS = {"P07", "P08", "P12", "P23"}
+MOST_STAFF_PRODUCTS = {"P16", "P20"}
+MOST_STAFF_SHARE = 0.6  # About what buyers chose.
+
+# Which rule gave a starting quantity. product_details.py uses it to explain the quantity, so the
+# number and its explanation always come from the same place.
+QuantityRule = str  # "exact", "per_site", "two_per_site", "most_staff" or "one"
+
+
+def quantity_rule(product_id: str, profile: BusinessProfile) -> tuple[int, QuantityRule]:
+    """The starting quantity, and the rule it came from. Exact answers in the profile take priority."""
+    if product_id in profile.quantities:
+        return profile.quantities[product_id], "exact"
+    sites = profile.num_sites
+    if product_id in PER_SITE_PRODUCTS:
+        return sites, "per_site"
+    if product_id in TWO_PER_SITE_PRODUCTS:
+        return 2 * sites, "two_per_site"
+    if product_id in MOST_STAFF_PRODUCTS:
+        return math.ceil(profile.employee_count * MOST_STAFF_SHARE), "most_staff"
+    return 1, "one"
+
+
 def default_quantity(product_id: str, profile: BusinessProfile) -> int:
     """A starting quantity the owner can change. Exact answers in the profile take priority."""
-    if product_id in profile.quantities:
-        return profile.quantities[product_id]
-
-    sites = profile.num_sites
-    roughly_most_staff = math.ceil(profile.employee_count * 0.6)  # About what buyers chose.
-    per_site_products = {"P01", "P02", "P03", "P04", "P05", "P06", "P09", "P10", "P19", "P21", "P22"}
-
-    if product_id in per_site_products:
-        return sites
-    if product_id in {"P07", "P08", "P12", "P23"}:
-        return 2 * sites
-    if product_id in {"P16", "P20"}:
-        return roughly_most_staff
-    return 1
+    return quantity_rule(product_id, profile)[0]
 
 
 def connection_options(profile: BusinessProfile, segment: str) -> list[str | None]:
@@ -194,11 +208,21 @@ def line_reason(product_id, profile, items, catalogue) -> str:
     return "Suggested for your business"
 
 
-def to_recommended_bundle(items, profile, segment, catalogue) -> RecommendedBundle:
+def to_recommended_bundle(
+    items, profile, segment, catalogue, peer_stats=None, *, is_alternative=False, assumed_internet=False
+) -> RecommendedBundle:
     return RecommendedBundle(
         quote=calculate_quote(items, catalogue),
         reasons={item.product_id: line_reason(item.product_id, profile, items, catalogue) for item in items},
         score=score_bundle(profile, segment, {item.product_id for item in items}),
+        # Only explains the choice made above. It never changes the items.
+        details={
+            item.product_id: product_details.build_details(
+                item.product_id, profile, segment, items, catalogue, peer_stats, profile.preferred_language,
+                is_alternative=is_alternative, assumed_internet=assumed_internet,
+            )
+            for item in items
+        },
     )
 
 
@@ -245,7 +269,7 @@ def rank_candidates(candidates, profile, segment, catalogue) -> list[list[Bundle
     return ranked
 
 
-def alternatives_to(best, ranked, profile, segment, catalogue) -> list[RecommendedBundle]:
+def alternatives_to(best, ranked, profile, segment, catalogue, peer_stats=None, assumed_internet=False) -> list[RecommendedBundle]:
     """Up to two other bundles, each built on a different connection."""
     def connection_of(items):
         return next((i.product_id for i in items if i.product_id in STANDARD_CONNECTIONS + LEASED_LINES), None)
@@ -256,7 +280,12 @@ def alternatives_to(best, ranked, profile, segment, catalogue) -> list[Recommend
         connection = connection_of(items)
         if connection not in seen and len(alternatives) < 2:
             seen.add(connection)
-            alternatives.append(to_recommended_bundle(items, profile, segment, catalogue))
+            alternatives.append(
+                to_recommended_bundle(
+                    items, profile, segment, catalogue, peer_stats,
+                    is_alternative=True, assumed_internet=assumed_internet,
+                )
+            )
     return alternatives
 
 
@@ -282,11 +311,19 @@ def explain_not_included(best_ids, wanted_ids, profile, catalogue) -> list[NotIn
     return results
 
 
-def build_addons(best_ids, wanted_ids, excluded_ids, profile, segment, catalogue) -> list[AddOn]:
-    """Things the owner can switch on: first anything cut for budget, then popular extras."""
-    addons = []
+def build_addons(
+    best_ids, wanted_ids, excluded_ids, profile, segment, catalogue, *, items=None, peer_stats=None
+) -> list[AddOn]:
+    """Things the owner can switch on: first anything cut for budget, then popular extras.
 
-    def add(product_id, reason):
+    `items` is the bundle with its quantities, used only to explain each add-on's effect on the bill.
+    """
+    addons = []
+    bundle_items = items if items is not None else [
+        BundleItem(product_id=product_id, quantity=default_quantity(product_id, profile)) for product_id in best_ids
+    ]
+
+    def add(product_id, reason, was_cut=False):
         product = catalogue[product_id]
         item = BundleItem(product_id=product_id, quantity=default_quantity(product_id, profile))
         line = calculate_quote([item], catalogue).lines[0]
@@ -298,12 +335,16 @@ def build_addons(best_ids, wanted_ids, excluded_ids, profile, segment, catalogue
                 monthly_inr=line.monthly_inr,
                 setup_inr=line.setup_inr,
                 reason=reason,
+                detail=product_details.build_addon_detail(
+                    item, profile, segment, bundle_items, catalogue, peer_stats, profile.preferred_language,
+                    was_cut=was_cut,
+                ),
             )
         )
 
     for product_id in wanted_ids:
         if product_id not in best_ids and product_id not in excluded_ids:
-            add(product_id, "You asked for this, but it is over your budget")
+            add(product_id, "You asked for this, but it is over your budget", was_cut=True)
 
     already_used = set(best_ids) | {addon.product_id for addon in addons} | set(excluded_ids)
     has_mobile = bool(already_used.intersection({"P07", "P08"}))
@@ -335,9 +376,12 @@ def assisted_reasons(profile, best_items, over_budget) -> list[str]:
     return reasons
 
 
-def recommend(profile: BusinessProfile, catalogue: Catalogue) -> Recommendation:
+def recommend(profile: BusinessProfile, catalogue: Catalogue, peer_stats=None) -> Recommendation:
+    """`peer_stats` (from product_stats.load_peer_stats) only adds facts to the explanations.
+    It never changes what is chosen. Without it, the details simply have no peer facts."""
     # With no stated need, assume the basic one, since most other products depend on it.
-    if not profile.needs:
+    assumed_internet = not profile.needs
+    if assumed_internet:
         profile = profile.model_copy(update={"needs": ["internet"]})
 
     segment = infer_segment(profile)
@@ -354,9 +398,15 @@ def recommend(profile: BusinessProfile, catalogue: Catalogue) -> Recommendation:
 
     return Recommendation(
         segment=segment,
-        bundle=to_recommended_bundle(best_items, profile, segment, catalogue) if best_items else None,
-        alternatives=alternatives_to(best_items, ranked, profile, segment, catalogue),
-        addons=build_addons(best_ids, wanted_ids, excluded_ids, profile, segment, catalogue),
+        bundle=(
+            to_recommended_bundle(best_items, profile, segment, catalogue, peer_stats, assumed_internet=assumed_internet)
+            if best_items
+            else None
+        ),
+        alternatives=alternatives_to(best_items, ranked, profile, segment, catalogue, peer_stats, assumed_internet),
+        addons=build_addons(
+            best_ids, wanted_ids, excluded_ids, profile, segment, catalogue, items=best_items, peer_stats=peer_stats
+        ),
         not_included=not_included,
         over_budget=over_budget,
         assisted_reasons=assisted_reasons(profile, best_items, over_budget),
@@ -366,7 +416,9 @@ def recommend(profile: BusinessProfile, catalogue: Catalogue) -> Recommendation:
 OWNER_CHOSE_IT = "You chose this from the rate list"
 
 
-def owner_chosen_plan(profile: BusinessProfile, items: list[BundleItem], catalogue: Catalogue) -> Recommendation:
+def owner_chosen_plan(
+    profile: BusinessProfile, items: list[BundleItem], catalogue: Catalogue, peer_stats=None
+) -> Recommendation:
     """Turns a plan the owner picked from the rate list into a quote. The caller has already checked
     it with check_bundle, so every rule that applies to a recommendation applies here too."""
     segment = infer_segment(profile)
@@ -376,12 +428,20 @@ def owner_chosen_plan(profile: BusinessProfile, items: list[BundleItem], catalog
         reasons={item.product_id: OWNER_CHOSE_IT for item in items},
         # The owner chose this, so there is no recommender score to show.
         score=ScoreParts(needs_covered=0, size_fit=0, simplicity=0, total=0),
+        # The owner chose these, so the details have no peer facts and no score, only plain facts.
+        details={
+            item.product_id: product_details.build_details(
+                item.product_id, profile, segment, items, catalogue, None, profile.preferred_language,
+                chosen_by="owner",
+            )
+            for item in items
+        },
     )
     return Recommendation(
         segment=segment,
         bundle=bundle,
         alternatives=[],
-        addons=build_addons(chosen_ids, [], set(), profile, segment, catalogue),
+        addons=build_addons(chosen_ids, [], set(), profile, segment, catalogue, items=items, peer_stats=peer_stats),
         not_included=[],
         over_budget=False,
         assisted_reasons=assisted_reasons(profile, items, False),
