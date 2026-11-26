@@ -1,11 +1,18 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { Building, ChevronRight, CircleCheck, CircleExclamationPoint, LogOut, Package, Smartphone, Trash, UserRound } from 'lucide-react'
 import { updateAccount, updateBusiness, type Account, type AccountBusiness } from './api'
 import { rupees } from './format'
 import { useLanguage } from './i18n'
 import { clearDeviceData, clearProfileDraft, readProfileDraft, saveProfileDraft, type BusinessDraft, type ProfileDraft } from './storage'
+import Avatar from './ui/Avatar'
+import Badge from './ui/Badge'
+import Button from './ui/Button'
+import { cx } from './ui/cx'
+import EmptyState from './ui/EmptyState'
+import { TextField } from './ui/Field'
+import SegmentedControl from './ui/SegmentedControl'
 
 const PHONE_PATTERN = /^[6-9]\d{9}$/
-const inputStyle = 'mt-1 w-full border bg-white px-3 py-2.5 text-base'
 
 type Status = { kind: 'saving' | 'saved' | 'error'; text: string } | null
 
@@ -26,6 +33,21 @@ function savedDraft(account: Account): ProfileDraft {
 
 function isSame(first: ProfileDraft, second: ProfileDraft) {
   return JSON.stringify(first) === JSON.stringify(second)
+}
+
+// A titled group of settings, like a section in a phone's settings app.
+function SettingsCard({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
+  return (
+    <section className="card">
+      <h2 className="flex items-center gap-2.5 text-title-2 font-extrabold">
+        <span aria-hidden="true" className="flex size-9 items-center justify-center rounded-control bg-brand-50 text-brand-600">
+          {icon}
+        </span>
+        {title}
+      </h2>
+      <div className="mt-4">{children}</div>
+    </section>
+  )
 }
 
 export default function ProfilePage({ account, onAccountChange, onOpenOrder, onSignOut }: Props) {
@@ -127,148 +149,190 @@ export default function ProfilePage({ account, onAccountChange, onOpenOrder, onS
     current && (
       <p
         role={current.kind === 'error' ? 'alert' : 'status'}
-        className={`mt-3 font-semibold ${current.kind === 'error' ? 'notice-error' : current.kind === 'saved' ? 'notice-success' : 'text-muted'}`}
+        className={cx(
+          'mt-3 flex items-center gap-2 font-semibold',
+          current.kind === 'error' ? 'notice-error' : current.kind === 'saved' ? 'notice-success' : 'text-ink-500',
+        )}
       >
-        {current.kind === 'saved' && <span aria-hidden="true">✓ </span>}
+        {current.kind === 'saved' && <CircleCheck aria-hidden="true" size={18} className="shrink-0" />}
+        {current.kind === 'error' && <CircleExclamationPoint aria-hidden="true" size={18} className="shrink-0" />}
         {current.text}
       </p>
     )
 
+  const orderCount = account.businesses.reduce((sum, business) => sum + business.orders.length, 0)
+
   return (
-    <div className="space-y-6 py-6">
+    <div className="space-y-5 py-6">
+      {/* ---------- Who is signed in ---------- */}
+      <section className="soft-mesh flex items-center gap-4 rounded-card p-5 shadow-e2">
+        <Avatar name={account.full_name} size="lg" />
+        <div className="min-w-0">
+          <p className="text-title-1 font-extrabold break-words">{account.full_name}</p>
+          <p className="text-small break-all text-ink-500">{account.email}</p>
+          <p className="mt-1.5 flex flex-wrap gap-1.5">
+            <Badge tone="neutral" icon={<Building size={13} />}>
+              {account.businesses.length} {t(account.businesses.length === 1 ? 'business' : 'businesses')}
+            </Badge>
+            <Badge tone="neutral" icon={<Package size={13} />}>
+              {orderCount} {t(orderCount === 1 ? 'order' : 'orders')}
+            </Badge>
+          </p>
+        </div>
+      </section>
+
       {showRestored && (
         <div className="notice">
           <p className="font-semibold">{t('We restored changes you had not saved on this device.')}</p>
-          <button type="button" className="mt-1 text-sm font-medium text-accent underline underline-offset-4" onClick={discardDraft}>
+          <button type="button" className="link text-small" onClick={discardDraft}>
             {t('Discard these changes')}
           </button>
         </div>
       )}
 
-      <form onSubmit={saveDetails} noValidate className="panel">
-        <h2 className="section-title">{t('Your details')}</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <label className="block font-semibold">
-            {t('Your name')}
-            <input
-              className={inputStyle}
+      {/* ---------- The owner's own details ---------- */}
+      <form onSubmit={saveDetails} noValidate>
+        <SettingsCard icon={<UserRound size={18} />} title={t('Your details')}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              label={t('Your name')}
               autoComplete="name"
               maxLength={80}
               value={draft.full_name}
               onChange={(event) => setDraft({ ...draft, full_name: event.target.value })}
             />
-          </label>
-          <label className="block font-semibold">
-            {t('Mobile number (optional)')}
-            <input
+            <TextField
+              label={t('Mobile number (optional)')}
               type="tel"
               inputMode="numeric"
-              className={inputStyle}
               autoComplete="tel-national"
               maxLength={10}
               value={draft.phone}
-              aria-invalid={Boolean(phoneProblem)}
+              error={phoneProblem || undefined}
               onChange={(event) => setDraft({ ...draft, phone: event.target.value.replace(/\D/g, '') })}
             />
-            {phoneProblem && <span className="mt-1 block text-sm font-semibold">{phoneProblem}</span>}
-          </label>
-          <div>
-            <p className="font-semibold">{t('Email')}</p>
-            <p className="mt-1 py-2 break-all">{account.email}</p>
+            <div>
+              <p className="field-label">{t('Email')}</p>
+              <p className="flex min-h-12 items-center rounded-control bg-ink-50 px-3.5 break-all text-ink-700">{account.email}</p>
+            </div>
+            <div>
+              <p className="field-label" id="profile-language">
+                {t('Language')}
+              </p>
+              <SegmentedControl
+                label={t('Language')}
+                value={language}
+                onChange={setLanguageChoice}
+                options={[
+                  { value: 'English', label: 'English', lang: 'en' },
+                  { value: 'Hindi', label: 'हिन्दी', lang: 'hi' },
+                ]}
+              />
+            </div>
           </div>
-          <label className="block font-semibold">
-            {t('Language')}
-            <select className={inputStyle} value={language} onChange={(event) => setLanguageChoice(event.target.value as 'English' | 'Hindi')}>
-              <option value="English">English</option>
-              <option value="Hindi">हिन्दी</option>
-            </select>
-          </label>
-        </div>
-        <button type="submit" disabled={status?.kind === 'saving'} className="mt-4 bg-accent px-6 py-3 font-semibold text-white disabled:opacity-60">
-          {t('Save my details')}
-        </button>
-        {statusLine(status)}
+          <Button type="submit" className="mt-5" isLoading={status?.kind === 'saving'} loadingText={t('Saving…')}>
+            {t('Save my details')}
+          </Button>
+          {statusLine(status)}
+        </SettingsCard>
       </form>
 
-      <section className="panel">
-        <h2 className="section-title">{t('Your businesses and orders')}</h2>
+      {/* ---------- Businesses, each with its orders ---------- */}
+      <SettingsCard icon={<Building size={18} />} title={t('Your businesses and orders')}>
         {account.businesses.length === 0 ? (
-          <p className="mt-3 text-muted">{t('No orders yet. Orders you accept while signed in will appear here.')}</p>
+          <EmptyState
+            picture="box"
+            title={t('No orders yet')}
+            text={t('No orders yet. Orders you accept while signed in will appear here.')}
+            className="py-4!"
+          />
         ) : (
-          <ul className="divide-y divide-rule">
+          <ul className="space-y-4">
             {account.businesses.map((business) => (
-              <li key={business.business_id} className="py-5">
+              <li key={business.business_id} className="rounded-card bg-ink-50 p-4 ring-1 ring-ink-100">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="block font-semibold">
-                    {t('Business name')}
-                    <input
-                      className={inputStyle}
-                      maxLength={120}
-                      value={draft.businesses[business.business_id]?.business_name ?? ''}
-                      onChange={(event) => setBusinessField(business.business_id, 'business_name', event.target.value)}
-                    />
-                  </label>
-                  <label className="block font-semibold">
-                    {t('Type of business')}
-                    <input
-                      className={inputStyle}
-                      maxLength={80}
-                      placeholder={t('For example, dental clinic')}
-                      value={draft.businesses[business.business_id]?.business_type ?? ''}
-                      onChange={(event) => setBusinessField(business.business_id, 'business_type', event.target.value)}
-                    />
-                  </label>
+                  <TextField
+                    label={t('Business name')}
+                    maxLength={120}
+                    className="bg-white"
+                    value={draft.businesses[business.business_id]?.business_name ?? ''}
+                    onChange={(event) => setBusinessField(business.business_id, 'business_name', event.target.value)}
+                  />
+                  <TextField
+                    label={t('Type of business')}
+                    maxLength={80}
+                    className="bg-white"
+                    placeholder={t('For example, dental clinic')}
+                    value={draft.businesses[business.business_id]?.business_type ?? ''}
+                    onChange={(event) => setBusinessField(business.business_id, 'business_type', event.target.value)}
+                  />
                 </div>
-                <p className="mt-2 text-sm text-muted">
+                <p className="mt-3 flex flex-wrap gap-1.5">
                   {[business.city, `${business.employee_count} ${t('people')}`, `${business.num_sites} ${t(business.num_sites === 1 ? 'site' : 'sites')}`, `GSTIN: ${t(business.has_gstin ? 'Yes' : 'No')}`]
                     .filter(Boolean)
-                    .join(' · ')}
-                </p>
-                <p className="text-sm text-muted">{t('Size, city and GSTIN come from your quote, so they cannot be changed here.')}</p>
-                <button type="button" className="mt-3 border border-field px-4 py-2 font-semibold" onClick={() => saveBusiness(business.business_id)}>
-                  {t('Save business details')}
-                </button>
-                {statusLine(businessStatus[business.business_id] ?? null)}
-                <ul className="mt-4 space-y-2">
-                  {business.orders.map((order) => (
-                    <li key={order.order_id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-paper px-3 py-2">
-                      <span>
-                        <span className="font-semibold">
-                          {t('Order')} {order.order_id}
-                        </span>
-                        : {t(order.status_label)} · {rupees(order.monthly_total_inr)} {t('a month')}
+                    .map((fact) => (
+                      <span key={fact} className="rounded-full bg-white px-2.5 py-1 text-caption font-semibold text-ink-700 ring-1 ring-ink-200">
+                        {fact}
                       </span>
-                      <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={() => onOpenOrder(business, order.order_id)}>
-                        {t('Open order')}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                    ))}
+                </p>
+                <p className="mt-2 text-caption text-ink-500">{t('Size, city and GSTIN come from your quote, so they cannot be changed here.')}</p>
+                <Button variant="secondary" size="sm" className="mt-3" onClick={() => saveBusiness(business.business_id)}>
+                  {t('Save business details')}
+                </Button>
+                {statusLine(businessStatus[business.business_id] ?? null)}
+                {business.orders.length > 0 && (
+                  <ul className="mt-4 space-y-2">
+                    {business.orders.map((order) => (
+                      <li key={order.order_id}>
+                        <button
+                          type="button"
+                          className="flex min-h-14 w-full items-center gap-3 rounded-control bg-white px-3.5 py-2.5 text-left shadow-e1 transition-shadow hover:shadow-e2"
+                          onClick={() => onOpenOrder(business, order.order_id)}
+                        >
+                          <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+                            <Package size={18} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-bold">
+                              {t('Order')} {order.order_id}
+                            </span>
+                            <span className="block text-small text-ink-500">
+                              {t(order.status_label)} · {rupees(order.monthly_total_inr)} {t('a month')}
+                            </span>
+                          </span>
+                          <span className="sr-only">{t('Open order')}</span>
+                          <ChevronRight aria-hidden="true" size={20} className="shrink-0 text-ink-400" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </SettingsCard>
 
-      <section className="panel">
-        <h2 className="section-title">{t('This device')}</h2>
-        <p className="mt-3 max-w-[62ch]">
+      {/* ---------- This device ---------- */}
+      <SettingsCard icon={<Smartphone size={18} />} title={t('This device')}>
+        <p className="max-w-[62ch] text-ink-700">
           {t('This browser keeps only your language, the order you are following, and changes you have not saved yet. Your password and documents are never stored here.')}
         </p>
-        <div className="mt-3 flex flex-wrap gap-4">
-          <button type="button" className="border border-field px-4 py-2 font-semibold" onClick={clearThisDevice}>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Button variant="secondary" isLoading={isSigningOut} loadingText={t('Signing out…')} icon={<LogOut aria-hidden="true" size={18} />} onClick={signOutHere}>
+            {t('Sign out')}
+          </Button>
+          <Button variant="ghost" icon={<Trash aria-hidden="true" size={18} />} onClick={clearThisDevice}>
             {t('Clear saved data on this device')}
-          </button>
-          <button type="button" disabled={isSigningOut} className="bg-accent px-4 py-2 font-semibold text-white disabled:opacity-60" onClick={signOutHere}>
-            {t(isSigningOut ? 'Signing out…' : 'Sign out')}
-          </button>
+          </Button>
         </div>
         {deviceMessage && (
           <p role="status" className="notice-success mt-3 font-medium">
             {deviceMessage}
           </p>
         )}
-      </section>
+      </SettingsCard>
     </div>
   )
 }

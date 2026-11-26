@@ -195,8 +195,24 @@ export type SavedQuote = {
   quote: Quote
 }
 
-export const saveQuote = (profile: Profile, items: BundleItem[], city: string | null) =>
-  request<SavedQuote>('/api/quotes', { profile, items, city })
+export const saveQuote = (profile: Profile, items: BundleItem[], city: string | null, chosenBy: 'advisor' | 'owner' = 'advisor') =>
+  request<SavedQuote>('/api/quotes', { profile, items, city, chosen_by: chosenBy })
+
+// The quote behind an order, so the owner can go back to it from any later step, even after a reload.
+export type AcceptedQuote = { profile: Profile; recommendation: Recommendation; city: string | null; can_change: boolean }
+export const fetchAcceptedQuote = (orderId: number) => request<AcceptedQuote>(`/api/quotes/for-order/${orderId}`)
+
+// Changes the quote of an order that is not placed yet. Same order, and the documents are kept.
+export const replaceAcceptedQuote = (
+  orderId: number,
+  profile: Profile,
+  items: BundleItem[],
+  city: string | null,
+  chosenBy: 'advisor' | 'owner' = 'advisor',
+) => send<SavedQuote>(`/api/quotes/for-order/${orderId}`, { method: 'PUT', json: { profile, items, city, chosen_by: chosenBy } })
+
+// Orders in these states can no longer change their quote.
+export const FIXED_ORDER_STATUSES = ['installation_scheduled', 'installation_in_progress', 'activated', 'cancelled']
 
 // ---------- KYC ----------
 

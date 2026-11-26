@@ -1,7 +1,14 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { ArrowDown, ArrowRight, Bot, Clock, ListChecks, Lock, SendHorizontal, Sparkles } from 'lucide-react'
+import { m, useInView, useReducedMotion } from 'motion/react'
 import { useLanguage } from './i18n'
 import { ApiError, sendAdvisorMessage, type AdvisorAnswers, type ChatMessage, type Profile, type Recommendation } from './api'
 import { rupees } from './format'
+import AnimatedNumber from './ui/AnimatedNumber'
+import Button from './ui/Button'
+import Chip from './ui/Chip'
+import { cx } from './ui/cx'
+import { DURATION, EASE_OUT } from './ui/motionTokens'
 
 const GREETING = "Hi! Tell me a little about your business and what you're hoping to improve. No need to have all the details ready—we can figure them out together."
 const EXAMPLES = [
@@ -130,6 +137,17 @@ export default function AdvisorChat({ onDone, onUseForm }: Props) {
   const [isBusy, setIsBusy] = useState(false)
   const [proposal, setProposal] = useState<ProposedQuote | null>(null)
   const [chatError, setChatError] = useState('')
+  const reduceMotion = useReducedMotion()
+  const endRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const isLatestVisible = useInView(endRef)
+
+  // Keep the newest message in view as the conversation grows. Not before the first message, so
+  // opening the page does not jump.
+  useEffect(() => {
+    if (messages.length === 0) return
+    endRef.current?.scrollIntoView({ block: 'end', behavior: reduceMotion ? 'auto' : 'smooth' })
+  }, [messages.length, isBusy, proposal, reduceMotion])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -210,107 +228,201 @@ export default function AdvisorChat({ onDone, onUseForm }: Props) {
     return `${items}: ${rupees(quote.monthly_total_inr)} ${t('a month')}.${setup} ${quote.contract_months} ${t('month contract')}.`
   }
 
+  const bundle = proposal?.recommendation.bundle
+  // New messages rise in gently. Earlier ones are already on screen and stay still.
+  const entrance = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { duration: DURATION.slow, ease: EASE_OUT } }
+
   return (
-    <div className="panel my-6">
-      {/* No language picker: the advisor replies in the language the owner writes in. */}
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={() => onUseForm()}>
+    <div className="card my-6 p-0!">
+      {/* The advisor's name card. No language picker: it replies in the language the owner writes in. */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-ink-100 px-4 py-3 sm:px-5">
+        <AdvisorAvatar size="md" />
+        <div className="min-w-0 flex-1">
+          <p className="font-bold leading-tight">{t('Advisor')}</p>
+          <p className="flex items-center gap-1.5 text-caption text-ink-500">
+            <span aria-hidden="true" className="size-2 rounded-full bg-success-500" />
+            {t('Replies in your language')}
+          </p>
+        </div>
+        <Button variant="ghost" size="sm" icon={<ListChecks aria-hidden="true" size={18} />} onClick={() => onUseForm()}>
           {t('Use a short form instead')}
-        </button>
+        </Button>
       </div>
 
-      <ul aria-live="polite" className="mt-6 space-y-3">
-        <li className="bubble-advisor max-w-[85%]">
-          <span className="block text-sm font-semibold text-muted">{t('Advisor')}</span>
-          {t(GREETING)}
+      <ul role="log" aria-live="polite" className="space-y-4 px-4 pt-5 pb-2 sm:px-5">
+        <li className="flex items-end gap-2">
+          <AdvisorAvatar size="sm" />
+          <p className="bubble-advisor max-w-[85%]">{t(GREETING)}</p>
         </li>
         {messages.length === 0 && (
-          <li>
-            <p className="text-sm text-muted">{t('For example:')}</p>
-            <div className="mt-1 flex flex-wrap gap-2">
+          <li className="pl-10">
+            <p className="eyebrow">{t('For example:')}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
               {EXAMPLES.map((example) => (
-                <button
+                <Chip
                   key={example}
-                  type="button"
-                  className="rounded-full border border-field bg-white px-3 py-1.5 text-left text-sm hover:border-accent hover:text-accent"
-                  onClick={() => setText(t(example))}
+                  className="whitespace-normal! text-left"
+                  icon={<Sparkles size={16} className="text-brand-600" />}
+                  onClick={() => {
+                    setText(t(example))
+                    inputRef.current?.focus()
+                  }}
                 >
                   {t(example)}
-                </button>
+                </Chip>
               ))}
             </div>
           </li>
         )}
-        {messages.map((message, index) => (
-          <li
-            key={index}
-            className={
-              message.role === 'user'
-                ? 'bubble-owner ml-auto w-fit max-w-[85%]'
-                : 'bubble-advisor max-w-[85%]'
-            }
-          >
-            {message.content}
-          </li>
-        ))}
-        {proposal && (
-          <li className="notice mt-4 max-w-[90%]">
-            <p className="font-semibold">{t("Here's a starting point based on what you've told me")}</p>
-            <p className="mt-1">{quoteSummary(proposal.recommendation)}</p>
-            {topReasons(proposal.recommendation).length > 0 && (
-              <p className="mt-1 text-sm">
-                <span className="font-semibold">{t('Why this bundle')}:</span> {topReasons(proposal.recommendation).join(' ')}
-              </p>
-            )}
-            {proposal.recommendation.bundle && (
-              <p className="mt-1 text-sm">
-                {t('Ready in about')} {proposal.recommendation.bundle.quote.install_days}{' '}
-                {t(proposal.recommendation.bundle.quote.install_days === 1 ? 'day' : 'days')}.
-              </p>
-            )}
-            {proposal.recommendation.bundle ? (
-              <>
-                <p className="mt-2">{t('How does this feel? Tell me here if you want to add, remove or change anything. If it looks good, we can go through the full quote.')}</p>
-                <button
-                  type="button"
-                  disabled={isBusy}
-                  className="mt-3 bg-accent px-4 py-2 font-semibold text-white disabled:opacity-60"
-                  onClick={() => showQuote(proposal, t("Yes, let's see the quote"), chatLanguage)}
-                >
-                  {t("Yes, let's see the quote")}
-                </button>
-              </>
-            ) : (
-              <p className="mt-2">{t('I could not find a suitable bundle yet. Tell me what you would like to change, and I can try again.')}</p>
-            )}
-          </li>
+        {messages.map((message, index) =>
+          message.role === 'user' ? (
+            <m.li key={index} {...entrance} className="flex justify-end">
+              <p className="bubble-owner max-w-[85%] break-words">{message.content}</p>
+            </m.li>
+          ) : (
+            <m.li key={index} {...entrance} className="flex items-end gap-2">
+              <AdvisorAvatar size="sm" />
+              <p className="bubble-advisor max-w-[85%] break-words">{message.content}</p>
+            </m.li>
+          ),
         )}
-        {isBusy && <li className="text-muted">{t('Thinking…')}</li>}
+        {proposal && (
+          <m.li {...entrance} className="pl-0 sm:pl-10">
+            <div className="overflow-hidden rounded-card bg-white shadow-e3 ring-1 ring-brand-100">
+              <div className="brand-mesh px-5 py-4">
+                <p className="flex items-center gap-2 text-small font-semibold text-white">
+                  <Sparkles aria-hidden="true" size={16} />
+                  {t("Here's a starting point based on what you've told me")}
+                </p>
+                {bundle && (
+                  <p className="mt-2 flex flex-wrap items-baseline gap-x-2">
+                    <AnimatedNumber value={bundle.quote.monthly_total_inr} countFrom={0} format={rupees} className="text-price font-extrabold" />
+                    <span className="font-semibold text-white">{t('a month')}</span>
+                  </p>
+                )}
+              </div>
+              <div className="space-y-3 px-5 py-4">
+                {bundle ? (
+                  <>
+                    <ul className="flex flex-wrap gap-2">
+                      {bundle.quote.lines.map((line) => (
+                        <li key={line.product_id} className="badge badge-neutral whitespace-normal!">
+                          {line.name}
+                          {line.quantity > 1 ? ` × ${line.quantity}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-small text-ink-600">
+                      {bundle.quote.setup_total_inr > 0 ? `${t('Plus')} ${rupees(bundle.quote.setup_total_inr)} ${t('one-time setup')}. ` : ''}
+                      {bundle.quote.contract_months} {t('month contract')}.
+                    </p>
+                    {topReasons(proposal.recommendation).length > 0 && (
+                      <p className="rounded-control bg-ink-50 px-3 py-2 text-small">
+                        <span className="font-bold">{t('Why this bundle')}:</span> {topReasons(proposal.recommendation).join(' ')}
+                      </p>
+                    )}
+                    <p className="flex items-center gap-1.5 text-small text-ink-600">
+                      <Clock aria-hidden="true" size={16} />
+                      {t('Ready in about')} {bundle.quote.install_days} {t(bundle.quote.install_days === 1 ? 'day' : 'days')}.
+                    </p>
+                    <p className="text-small">
+                      {t('How does this feel? Tell me here if you want to add, remove or change anything. If it looks good, we can go through the full quote.')}
+                    </p>
+                    <Button
+                      block
+                      disabled={isBusy}
+                      iconAfter={<ArrowRight aria-hidden="true" size={18} />}
+                      onClick={() => showQuote(proposal, t("Yes, let's see the quote"), chatLanguage)}
+                    >
+                      {t("Yes, let's see the quote")}
+                    </Button>
+                  </>
+                ) : (
+                  <p>{quoteSummary(proposal.recommendation)} {t('I could not find a suitable bundle yet. Tell me what you would like to change, and I can try again.')}</p>
+                )}
+              </div>
+            </div>
+          </m.li>
+        )}
+        {isBusy && (
+          <m.li {...entrance} className="flex items-end gap-2">
+            <AdvisorAvatar size="sm" />
+            <span className="bubble-advisor flex items-center gap-1.5 py-3.5!">
+              <span className="sr-only">{t('Thinking…')}</span>
+              {[0, 150, 300].map((delay) => (
+                <span key={delay} aria-hidden="true" className="size-2 animate-typing rounded-full bg-ink-400" style={{ animationDelay: `${delay}ms` }} />
+              ))}
+            </span>
+          </m.li>
+        )}
       </ul>
+      <div ref={endRef} aria-hidden="true" className="h-px" />
 
       {chatError && (
-        <p role="alert" className="notice-error mt-4 text-sm">
+        <p role="alert" className="notice-error mx-4 mb-3 text-small sm:mx-5">
           {chatError}
         </p>
       )}
 
-      <form onSubmit={handleSubmit} className="mt-6 flex gap-2">
-        <label className="flex-1">
-          <span className="sr-only">{t('Your answer')}</span>
-          <input
-            className="w-full border border-field bg-white px-3 py-2 text-lg"
-            value={text}
-            maxLength={1000}
-            disabled={isBusy}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={t(proposal ? 'Tell me what to change, or say “looks good”' : 'Write a message')}
-          />
-        </label>
-        <button type="submit" disabled={isBusy} className="bg-accent px-5 py-2 font-semibold text-white disabled:opacity-60">
-          {t('Send')}
-        </button>
-      </form>
-      <p className="mt-2 text-sm text-muted">{t('Quick privacy note: please do not share ID numbers. For GSTIN, yes or no is all I need.')}</p>
+      {/* The composer stays at the bottom of the screen, above the navigation, while the chat scrolls. */}
+      <div className="sticky bottom-(--nav-offset) z-20 rounded-b-card">
+        {!isLatestVisible && messages.length > 1 && (
+          <div className="pointer-events-none absolute -top-14 right-4 flex justify-end">
+            <button
+              type="button"
+              aria-label={t('Go to the latest message')}
+              className="pointer-events-auto flex size-11 items-center justify-center rounded-full bg-white text-ink-800 shadow-e3 ring-1 ring-ink-200"
+              onClick={() => endRef.current?.scrollIntoView({ block: 'end', behavior: reduceMotion ? 'auto' : 'smooth' })}
+            >
+              <ArrowDown aria-hidden="true" size={20} />
+            </button>
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="glass flex items-center gap-2 rounded-b-card border-t border-ink-100 px-3 py-3 sm:px-4">
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">{t('Your answer')}</span>
+            <input
+              ref={inputRef}
+              className="input rounded-full! border-ink-200! bg-ink-50 px-5"
+              value={text}
+              maxLength={1000}
+              disabled={isBusy}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={t(proposal ? 'Tell me what to change, or say “looks good”' : 'Write a message')}
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={isBusy || !text.trim()}
+            aria-label={t('Send')}
+            className={cx(
+              'flex size-12 shrink-0 items-center justify-center rounded-full transition-[transform,background-color] duration-200 ease-spring active:scale-90',
+              text.trim() && !isBusy ? 'bg-brand-600 text-white shadow-brand hover:bg-brand-700' : 'bg-ink-100 text-ink-400',
+            )}
+          >
+            <SendHorizontal aria-hidden="true" size={20} />
+          </button>
+        </form>
+      </div>
+      <p className="flex items-start gap-1.5 px-4 pt-1 pb-4 text-caption text-ink-500 sm:px-5">
+        <Lock aria-hidden="true" size={14} className="mt-0.5 shrink-0" />
+        {t('Quick privacy note: please do not share ID numbers. For GSTIN, yes or no is all I need.')}
+      </p>
     </div>
+  )
+}
+
+// The advisor's round picture: our bot mark on brand red. Decorative, as the name is written nearby.
+function AdvisorAvatar({ size }: { size: 'sm' | 'md' }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cx(
+        'flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-brand-500 to-brand-800 text-white shadow-e1',
+        size === 'sm' ? 'size-8' : 'size-11',
+      )}
+    >
+      <Bot size={size === 'sm' ? 16 : 22} />
+    </span>
   )
 }

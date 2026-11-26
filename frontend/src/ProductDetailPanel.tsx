@@ -1,7 +1,10 @@
 import { useState, type ReactNode } from 'react'
+import { ArrowUpRight, ChevronRight, CircleCheck, Info, Scale, Scissors } from 'lucide-react'
 import { useLanguage } from './i18n'
 import { type ProductDetail, type QuoteLine } from './api'
 import { rupees } from './format'
+import ProductIcon from './ProductIcon'
+import Sheet from './ui/Sheet'
 
 type Props = {
   productId: string
@@ -15,30 +18,38 @@ type Props = {
   bundleUnchanged: boolean
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, icon, children }: { title: string; icon?: ReactNode; children: ReactNode }) {
   return (
-    <div>
-      <h3 className="font-semibold">{title}</h3>
+    <section className="border-t border-ink-100 pt-4 first:border-t-0 first:pt-0">
+      <h3 className="flex items-center gap-2 font-bold">
+        {icon && <span aria-hidden="true" className="flex text-brand-600">{icon}</span>}
+        {title}
+      </h3>
       {children}
-    </div>
+    </section>
   )
 }
 
 function Bullets({ items }: { items: string[] }) {
   return (
-    <ul className="mt-1 list-disc space-y-1 pl-5">
+    <ul className="mt-2 space-y-1.5">
       {items.map((text) => (
-        <li key={text}>{text}</li>
+        <li key={text} className="flex gap-2">
+          <span aria-hidden="true" className="mt-2.5 size-1.5 shrink-0 rounded-full bg-ink-400" />
+          <span>{text}</span>
+        </li>
       ))}
     </ul>
   )
 }
 
-/** "Why this? See details": a panel that explains one product. Closed until the owner opens it. */
+/**
+ * "Why this? See details": opens a sheet that explains one product. It slides up from the bottom on a
+ * phone and in from the right on a computer, and closes with Escape, the X, or a tap outside.
+ */
 export default function ProductDetailPanel({ productId, name, detail, liveLine, billTotal, bundleUnchanged }: Props) {
   const { t, language } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
-  const panelId = `product-detail-${productId}`
   const hindi = language === 'hi'
 
   const isOn = Boolean(liveLine)
@@ -60,7 +71,7 @@ export default function ProductDetailPanel({ productId, name, detail, liveLine, 
   const why = detail.why ?? []
   const goodToKnow = detail.good_to_know ?? []
   const others = detail.why_not_others ?? []
-  const label = t(isOpen ? 'Hide details' : 'Why this? See details')
+  const label = t('Why this? See details')
 
   function shareText(share: number) {
     if (isOn) return hindi ? `आपके बिल का लगभग ${share}%` : `About ${share}% of your bill`
@@ -68,81 +79,98 @@ export default function ProductDetailPanel({ productId, name, detail, liveLine, 
   }
 
   return (
-    <div className="mt-1">
+    <>
       <button
         type="button"
-        aria-expanded={isOpen}
-        aria-controls={panelId}
+        aria-haspopup="dialog"
         aria-label={`${label}: ${name}`}
-        className="min-h-11 py-2 text-left font-medium text-accent underline underline-offset-4"
-        onClick={() => setIsOpen((open) => !open)}
+        className="link -ml-0.5 text-small"
+        onClick={() => setIsOpen(true)}
       >
+        <Info aria-hidden="true" size={16} />
         {label}
+        <ChevronRight aria-hidden="true" size={16} />
       </button>
-      <div id={panelId} hidden={!isOpen} className="mb-2 space-y-3 border-l-2 border-rule pl-3 text-sm text-ink break-words">
-        {(changedTo !== null || why.length > 0) && (
-          <Section title={t('Why we chose it')}>
-            <Bullets items={[...(changedTo !== null ? [`${t('You changed this to')} ${changedTo}.`] : []), ...why]} />
-          </Section>
-        )}
 
-        {detail.what_you_get && (
-          <Section title={t('What you get')}>
-            <p className="mt-1">{detail.what_you_get}</p>
-          </Section>
-        )}
-
-        {goodToKnow.length > 0 && (
-          <Section title={t('Good to know')}>
-            <Bullets items={goodToKnow} />
-          </Section>
-        )}
-
-        {price && (
-          <Section title={t('Price breakdown')}>
-            <ul className="mt-1 space-y-1 tabular-nums">
-              <li>
-                {price.quantity > 1
-                  ? `${rupees(price.unit)} × ${price.quantity} = ${rupees(price.monthly)} ${t('a month')}`
-                  : `${rupees(price.monthly)} ${t('a month')}`}
-              </li>
-              <li>{price.setup > 0 ? `${rupees(price.setup)} ${t('one time')}` : t('No setup fee')}</li>
-              {saved && (
-                <li>
-                  {saved.range_min_inr === saved.range_max_inr
-                    ? `${t('Price')}: ${rupees(saved.range_min_inr)} ${t('a month')}`
-                    : `${t('Catalogue price range')}: ${rupees(saved.range_min_inr)}–${rupees(saved.range_max_inr)} ${t('a month')}`}
-                </li>
+      <Sheet
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        title={
+          <span className="flex items-center gap-3">
+            <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-control bg-brand-50 text-brand-600">
+              <ProductIcon productId={productId} size={20} />
+            </span>
+            <span className="min-w-0 break-words">{name}</span>
+          </span>
+        }
+        description={detail.what_you_get}
+      >
+        <div className="space-y-4">
+          {price && (
+            <div className="rounded-card bg-ink-50 p-4">
+              <p className="text-title-1 font-extrabold tabular-nums">
+                {rupees(price.monthly)} <span className="text-small font-semibold text-ink-500">{t('a month')}</span>
+              </p>
+              <ul className="mt-1 space-y-0.5 text-small text-ink-600 tabular-nums">
+                {price.quantity > 1 && <li>{`${rupees(price.unit)} × ${price.quantity}`}</li>}
+                <li>{price.setup > 0 ? `${rupees(price.setup)} ${t('one time')}` : t('No setup fee')}</li>
+                {saved && (
+                  <li>
+                    {saved.range_min_inr === saved.range_max_inr
+                      ? `${t('Price')}: ${rupees(saved.range_min_inr)} ${t('a month')}`
+                      : `${t('Catalogue price range')}: ${rupees(saved.range_min_inr)}–${rupees(saved.range_max_inr)} ${t('a month')}`}
+                  </li>
+                )}
+              </ul>
+              {(isOn ? billTotal > 0 : price.share > 0) && (
+                <div className="mt-3">
+                  <p className="text-caption font-semibold text-ink-600">{shareText(price.share)}</p>
+                  <span aria-hidden="true" className="mt-1 block h-1.5 overflow-hidden rounded-full bg-ink-200">
+                    <span className="block h-full rounded-full bg-brand-600" style={{ width: `${Math.min(100, price.share)}%` }} />
+                  </span>
+                </div>
               )}
-              {(isOn ? billTotal > 0 : price.share > 0) && <li>{shareText(price.share)}</li>}
-            </ul>
-          </Section>
-        )}
+            </div>
+          )}
 
-        {others.length > 0 && (
-          <Section title={t('Why not other options')}>
-            <ul className="mt-1 space-y-1">
-              {others.map((other) => (
-                <li key={other.product_id}>
-                  <span className="font-semibold">{other.name}:</span> {other.difference}
-                </li>
-              ))}
-            </ul>
-          </Section>
-        )}
+          {(changedTo !== null || why.length > 0) && (
+            <Section title={t('Why we chose it')} icon={<CircleCheck size={18} />}>
+              <Bullets items={[...(changedTo !== null ? [`${t('You changed this to')} ${changedTo}.`] : []), ...why]} />
+            </Section>
+          )}
 
-        {bundleUnchanged && detail.upgrade && (
-          <Section title={t('Upgrade later')}>
-            <p className="mt-1">{detail.upgrade.note}</p>
-          </Section>
-        )}
+          {goodToKnow.length > 0 && (
+            <Section title={t('Good to know')} icon={<Info size={18} />}>
+              <Bullets items={goodToKnow} />
+            </Section>
+          )}
 
-        {bundleUnchanged && isOn && detail.if_removed && (
-          <Section title={t('If you remove it')}>
-            <p className="mt-1">{detail.if_removed}</p>
-          </Section>
-        )}
-      </div>
-    </div>
+          {others.length > 0 && (
+            <Section title={t('Why not other options')} icon={<Scale size={18} />}>
+              <ul className="mt-2 space-y-2">
+                {others.map((other) => (
+                  <li key={other.product_id} className="rounded-control bg-ink-50 px-3 py-2.5">
+                    <span className="block font-semibold">{other.name}</span>
+                    <span className="text-small text-ink-600">{other.difference}</span>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          {bundleUnchanged && detail.upgrade && (
+            <Section title={t('Upgrade later')} icon={<ArrowUpRight size={18} />}>
+              <p className="mt-2">{detail.upgrade.note}</p>
+            </Section>
+          )}
+
+          {bundleUnchanged && isOn && detail.if_removed && (
+            <Section title={t('If you remove it')} icon={<Scissors size={18} />}>
+              <p className="mt-2">{detail.if_removed}</p>
+            </Section>
+          )}
+        </div>
+      </Sheet>
+    </>
   )
 }

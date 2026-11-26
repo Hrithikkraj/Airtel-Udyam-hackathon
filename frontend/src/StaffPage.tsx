@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { ChartColumn, CircleCheck, ClipboardList, KeyRound, LogOut, Phone, PhoneCall } from 'lucide-react'
 import { staffRequest } from './api'
 import FunnelDashboard, { type Funnel } from './FunnelDashboard'
 import { rupees } from './format'
+import Badge from './ui/Badge'
+import Button from './ui/Button'
+import { cx } from './ui/cx'
+import { TextField } from './ui/Field'
+import { Loading, Skeleton, SkeletonText } from './ui/Skeleton'
 
 const KEY_STORAGE = 'accel-staff-key' // Cleared when the browser tab closes.
 
@@ -46,26 +52,50 @@ type LeadToCall = {
 }
 
 const TABS = [
-  { id: 'queue', label: 'Work queue' },
-  { id: 'funnel', label: 'Funnel' },
-  { id: 'leads', label: 'Leads to call' },
+  { id: 'queue', label: 'Work queue', icon: ClipboardList },
+  { id: 'funnel', label: 'Funnel', icon: ChartColumn },
+  { id: 'leads', label: 'Leads to call', icon: PhoneCall },
 ]
 
-const smallButton = 'border border-field px-3 py-1.5 font-semibold disabled:opacity-60'
-const mainButton = 'bg-accent px-3 py-1.5 font-semibold text-white disabled:opacity-60'
+const smallButton = 'btn btn-secondary btn-sm'
+const mainButton = 'btn btn-primary btn-sm'
+
+// Shimmering cards while staff data loads. One line for screen readers says what is loading.
+function StaffLoading({ label }: { label: string }) {
+  return (
+    <Loading label={label} className="mt-6 space-y-4">
+      {[0, 1].map((index) => (
+        <div key={index} className="card space-y-3">
+          <Skeleton className="h-5 w-1/3" />
+          <SkeletonText lines={2} />
+        </div>
+      ))}
+    </Loading>
+  )
+}
 
 function describe(order: OrderSummary) {
   const place = order.city ?? 'City not listed'
   return `${place}, ${order.employee_count} people, ${order.num_sites} site${order.num_sites === 1 ? '' : 's'}, ${rupees(order.monthly_total_inr)} a month`
 }
 
-function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+function Section({ title, count, children }: { title: string; count: number; children: ReactNode }) {
   return (
-    <section className="panel mt-6">
-      <h2 className="section-title">
-        {title} <span className="font-body text-lg font-normal text-muted tabular-nums">{count}</span>
+    <section className="card mt-5">
+      <h2 className="flex items-center justify-between gap-3 text-title-2 font-extrabold">
+        {title}
+        <Badge tone={count > 0 ? 'brand' : 'neutral'} icon={false} className="tabular-nums">
+          {count}
+        </Badge>
       </h2>
-      {count === 0 ? <p className="py-3 text-muted">Nothing waiting.</p> : <ul className="divide-y divide-rule">{children}</ul>}
+      {count === 0 ? (
+        <p className="mt-3 flex items-center gap-2 text-ink-500">
+          <CircleCheck aria-hidden="true" size={18} className="text-success-600" />
+          Nothing waiting.
+        </p>
+      ) : (
+        <ul className="mt-1 divide-y divide-ink-100">{children}</ul>
+      )}
     </section>
   )
 }
@@ -84,18 +114,16 @@ function ReviewItem({ review, onDecide, isBusy }: { review: Review; onDecide: (i
   const [note, setNote] = useState('')
   return (
     <li className="py-4">
-      <p className="font-semibold">Order {review.order_id}</p>
-      <p className="text-sm text-muted">{describe(review)}</p>
+      <p className="font-bold">Order {review.order_id}</p>
+      <p className="text-small text-ink-500">{describe(review)}</p>
       <DocumentReasons review={review} />
-      <label className="mt-3 block text-sm font-semibold">
-        Note for the owner (needed if you send documents back)
-        <input
-          className="mt-1 w-full border bg-white px-2 py-1.5 font-normal"
-          maxLength={300}
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-        />
-      </label>
+      <TextField
+        label="Note for the owner (needed if you send documents back)"
+        wrapperClassName="mt-3"
+        maxLength={300}
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+      />
       <div className="mt-2 flex flex-wrap gap-3">
         <button type="button" disabled={isBusy} className={mainButton} onClick={() => onDecide(review.order_id, 'approve', note)}>
           Approve documents
@@ -132,7 +160,7 @@ function WorkQueue({ staffKey }: { staffKey: string }) {
     }
   }
 
-  if (!queue) return <p className="py-8">{error || 'Loading the work queue…'}</p>
+  if (!queue) return error ? <p role="alert" className="notice-error mt-6 font-medium">{error}</p> : <StaffLoading label="Loading the work queue…" />
 
   return (
     <div>
@@ -152,8 +180,11 @@ function WorkQueue({ staffKey }: { staffKey: string }) {
       <Section title="Leads the advisor could not close" count={queue.callbacks.length}>
         {queue.callbacks.map((callback) => (
           <li key={callback.callback_id} className="py-4">
-            <p className="font-semibold tabular-nums">Call {callback.phone}</p>
-            <p className="text-sm text-muted">
+            <p className="flex items-center gap-2 font-bold tabular-nums">
+              <Phone aria-hidden="true" size={16} className="text-brand-600" />
+              Call {callback.phone}
+            </p>
+            <p className="text-small text-ink-500">
               {callback.city ?? 'City not listed'}, {callback.employee_count} people, {callback.num_sites} site
               {callback.num_sites === 1 ? '' : 's'}
               {callback.monthly_estimate_inr ? `, about ${rupees(callback.monthly_estimate_inr)} a month` : ''}
@@ -174,7 +205,7 @@ function WorkQueue({ staffKey }: { staffKey: string }) {
             <p className="font-semibold">
               Order {order.order_id}: {order.status_label}
             </p>
-            <p className="text-sm text-muted">{describe(order)}</p>
+            <p className="text-small text-ink-500">{describe(order)}</p>
             {order.help_phone && <p className="mt-1 font-semibold tabular-nums">Call {order.help_phone}</p>}
             <button type="button" disabled={isBusy} className={`${smallButton} mt-2`} onClick={() => act(`orders/${order.order_id}/resolve-help`)}>
               Mark as resolved and delete number
@@ -189,7 +220,7 @@ function WorkQueue({ staffKey }: { staffKey: string }) {
             <p className="font-semibold">
               Order {order.order_id}: {order.status_label}
             </p>
-            <p className="text-sm text-muted">{describe(order)}</p>
+            <p className="text-small text-ink-500">{describe(order)}</p>
             <button type="button" disabled={isBusy} className={`${mainButton} mt-2`} onClick={() => act(`orders/${order.order_id}/advance`)}>
               {order.status_label === 'Installation in progress' ? 'Finish and activate' : 'Start installation'}
             </button>
@@ -201,9 +232,9 @@ function WorkQueue({ staffKey }: { staffKey: string }) {
         {queue.documents_not_accepted.map((order) => (
           <li key={order.order_id} className="py-4">
             <p className="font-semibold">Order {order.order_id}</p>
-            <p className="text-sm text-muted">{describe(order)}</p>
+            <p className="text-small text-ink-500">{describe(order)}</p>
             <DocumentReasons review={order} />
-            <p className="mt-2 text-sm text-muted">Waiting for the owner to upload a corrected document. These cannot be approved here.</p>
+            <p className="mt-2 text-small text-ink-500">Waiting for the owner to upload a corrected document. These cannot be approved here.</p>
           </li>
         ))}
       </Section>
@@ -219,7 +250,7 @@ function LeadsToCall({ staffKey }: { staffKey: string }) {
     staffRequest<LeadToCall[]>(staffKey, 'leads-to-call?limit=20').then(setLeads).catch((caught) => setError(caught.message))
   }, [staffKey])
 
-  if (!leads) return <p className="py-8">{error || 'Loading the call list…'}</p>
+  if (!leads) return error ? <p role="alert" className="notice-error mt-6 font-medium">{error}</p> : <StaffLoading label="Loading the call list…" />
 
   return (
     <div className="py-6">
@@ -227,17 +258,22 @@ function LeadsToCall({ staffKey }: { staffKey: string }) {
         Past leads who dropped out for a reason a call could fix, most promising first. The score only orders this list.
         It never decides who can buy.
       </p>
-      <ol className="panel mt-4 divide-y divide-rule">
+      <ol className="card mt-4 divide-y divide-ink-100">
         {leads.map((lead) => (
-          <li key={lead.lead_id} className="py-3">
-            <div className="flex items-baseline justify-between gap-3">
-              <p className="font-semibold">{lead.business_name}</p>
-              <p className="font-display font-semibold whitespace-nowrap tabular-nums">{lead.score_pct}%</p>
+          <li key={lead.lead_id} className="py-4 first:pt-0 last:pb-0">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-bold">{lead.business_name}</p>
+              <Badge tone="info" icon={false} className="tabular-nums">
+                {lead.score_pct}%
+              </Badge>
             </div>
-            <p className="text-sm text-muted">{lead.city}, {lead.segment}, from {lead.source.toLowerCase()}</p>
+            <span aria-hidden="true" className="mt-2 block h-1.5 overflow-hidden rounded-full bg-ink-100">
+              <span className="block h-full rounded-full bg-info-500" style={{ width: `${Math.min(100, lead.score_pct)}%` }} />
+            </span>
+            <p className="text-small text-ink-500">{lead.city}, {lead.segment}, from {lead.source.toLowerCase()}</p>
             <p className="mt-1">Dropped because: {lead.drop_reason.toLowerCase()}</p>
             <p className="font-semibold">{lead.advice}</p>
-            <p className="text-sm text-muted">Score is higher because: {lead.score_reasons.replaceAll(';', ',').toLowerCase()}</p>
+            <p className="text-small text-ink-500">Score is higher because: {lead.score_reasons.replaceAll(';', ',').toLowerCase()}</p>
           </li>
         ))}
       </ol>
@@ -278,49 +314,61 @@ export default function StaffPage({ onExit }: { onExit: () => void }) {
 
   if (!staffKey) {
     return (
-      <form onSubmit={signIn} className="panel my-6 max-w-sm">
-        <label className="block font-semibold">
-          Staff key
-          <input
-            type="password"
-            required
-            autoComplete="off"
-            className="mt-1 w-full border bg-white px-3 py-2.5 text-base"
-            value={typedKey}
-            onChange={(event) => setTypedKey(event.target.value)}
-          />
-        </label>
-        {error && <p role="alert" className="mt-2 font-semibold">{error}</p>}
-        <div className="mt-4 flex items-center gap-4">
-          <button type="submit" className="bg-accent px-6 py-3 font-semibold text-white">Sign in</button>
-        </div>
+      <form onSubmit={signIn} className="card my-6 max-w-sm">
+        <span aria-hidden="true" className="flex size-12 items-center justify-center rounded-card bg-ink-900 text-white">
+          <KeyRound size={22} />
+        </span>
+        <TextField
+          label="Staff key"
+          type="password"
+          required
+          autoComplete="off"
+          wrapperClassName="mt-4"
+          value={typedKey}
+          error={error || undefined}
+          onChange={(event) => setTypedKey(event.target.value)}
+        />
+        <Button type="submit" block className="mt-4">
+          Sign in
+        </Button>
       </form>
     )
   }
 
   return (
     <div className="pb-12">
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <div role="tablist" className="flex gap-4">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <div role="tablist" className="scrollbar-none flex gap-1 overflow-x-auto rounded-full bg-white p-1 shadow-e1">
           {TABS.map((item) => (
             <button
               key={item.id}
               role="tab"
               type="button"
               aria-selected={tab === item.id}
-              className={`border-b-2 py-1 font-semibold ${tab === item.id ? 'border-accent text-accent' : 'border-transparent text-muted'}`}
+              className={cx(
+                'flex min-h-11 items-center gap-2 rounded-full px-4 text-small font-bold whitespace-nowrap transition-colors duration-200',
+                tab === item.id ? 'bg-ink-900 text-white' : 'text-ink-600 hover:bg-ink-100',
+              )}
               onClick={() => setTab(item.id)}
             >
+              <item.icon aria-hidden="true" size={16} />
               {item.label}
             </button>
           ))}
         </div>
-        <button type="button" className="text-sm font-medium text-accent underline underline-offset-4" onClick={signOut}>
+        <Button variant="ghost" size="sm" icon={<LogOut aria-hidden="true" size={16} />} onClick={signOut}>
           Sign out
-        </button>
+        </Button>
       </div>
       {tab === 'queue' && <WorkQueue staffKey={staffKey} />}
-      {tab === 'funnel' && (funnel ? <FunnelDashboard funnel={funnel} /> : <p className="py-8">{error || 'Loading the funnel…'}</p>)}
+      {tab === 'funnel' &&
+        (funnel ? (
+          <FunnelDashboard funnel={funnel} />
+        ) : error ? (
+          <p role="alert" className="notice-error mt-6 font-medium">{error}</p>
+        ) : (
+          <StaffLoading label="Loading the funnel…" />
+        ))}
       {tab === 'leads' && <LeadsToCall staffKey={staffKey} />}
     </div>
   )

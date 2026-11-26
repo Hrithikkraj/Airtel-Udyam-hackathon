@@ -171,6 +171,10 @@ class Quote(Base):
     setup_total_inr = Column(Integer, nullable=False)
     contract_months = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=utc_now)
+    # How the quote was made: {"profile": BusinessProfile, "chosen_by": "advisor" or "owner"}.
+    # Lets the owner reopen and change it later. No names, IDs or chat text, only what the
+    # recommender needs. Empty for quotes saved before this was added.
+    accepted_with = Column(JSON)
 
     business = relationship("Business")
     items = relationship("QuoteItem")

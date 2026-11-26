@@ -1,20 +1,35 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { House, LayoutGrid, Package, ReceiptText, User } from 'lucide-react'
 import AdvisorChat from './AdvisorChat'
 import AuthPage from './AuthPage'
+import BottomNav from './BottomNav'
 import CataloguePage, { type Plan } from './CataloguePage'
 import GuidedForm from './GuidedForm'
 import JourneySteps, { type StepKey } from './JourneySteps'
-import KycPage from './KycPage'
+import OfflineBanner from './OfflineBanner'
 import OrderPage from './OrderPage'
 import PageHeader from './PageHeader'
 import ProfilePage from './ProfilePage'
 import QuotePage from './QuotePage'
-import StaffPage from './StaffPage'
 import { useLanguage } from './i18n'
+import type { NavItem } from './navigation'
+import PageTransition from './ui/PageTransition'
+import Button from './ui/Button'
+import EmptyState from './ui/EmptyState'
+import { Loading, Skeleton } from './ui/Skeleton'
+import { useToast } from './ui/useToast'
+
+// Loaded only when opened, so the first screen arrives sooner on a slow network. Most owners never
+// see the staff tools, and verification comes later in the journey.
+const KycPage = lazy(() => import('./KycPage'))
+const StaffPage = lazy(() => import('./StaffPage'))
 import {
   claimBusiness,
+  fetchAcceptedQuote,
   fetchAccount,
   fetchAdvisorStatus,
+  fetchOrder,
+  FIXED_ORDER_STATUSES,
   rememberOrder,
   signOut,
   SIGNED_OUT_EVENT,
@@ -77,6 +92,7 @@ const openedByAddress = screenInAddress() !== null
 
 export default function App() {
   const { t, setLanguage } = useLanguage()
+  const toast = useToast()
   // The order this browser is following. Only its numbers are stored. Its secret is an HttpOnly cookie.
   const [session, setSession] = useState<OrderPointer | null>(startingOrder.pointer)
   // undefined while checking, null when nobody is signed in on this browser.
@@ -90,13 +106,24 @@ export default function App() {
   // What the owner has picked on the rate list. Kept here so going back to the list keeps it.
   const [plan, setPlan] = useState<Plan>({})
   const [authNotice, setAuthNotice] = useState('')
+  // The order's status, so the quote page knows whether accepting may still change that order.
+  const [orderStatus, setOrderStatus] = useState<string>()
+  const [quoteLoadFailed, setQuoteLoadFailed] = useState(false)
+  const [quoteLoadAttempt, setQuoteLoadAttempt] = useState(0)
+  // A new number makes the quote page start fresh when a different quote is shown.
+  const [quoteVersion, setQuoteVersion] = useState(0)
   const legacyToken = useRef(startingOrder.legacyToken)
+  // Which way the owner is moving, so the next page slides in from the right side (forward) or the
+  // left side (back). The history depth tells the browser's own back button apart from forward.
+  const [direction, setDirection] = useState<1 | -1>(1)
+  const depthRef = useRef(historyDepth())
 
-  // A screen can only open if what it shows still exists. After a reload the quote is gone, for example.
+  // A screen can only open if what it shows still exists. A quote that was accepted can always be
+  // loaded again from the server, so it stays reachable from every later step, even after a reload.
   const canShow = useCallback(
     (wanted: Screen | null): wanted is Screen => {
       if (wanted === null) return false
-      if (wanted === 'quote') return Boolean(recommendation && profile)
+      if (wanted === 'quote') return Boolean((recommendation && profile) || session)
       if (wanted === 'order' || wanted === 'kyc') return Boolean(session)
       return true
     },
@@ -106,8 +133,8 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(() => {
     if (sessionStorage.getItem('accel-staff-key')) return 'staff'
     const inAddress = screenInAddress()
-    if (inAddress === 'order' || inAddress === 'kyc') return session ? inAddress : 'form'
-    if (inAddress && inAddress !== 'quote') return inAddress
+    if (inAddress === 'order' || inAddress === 'kyc' || inAddress === 'quote') return session ? inAddress : 'form'
+    if (inAddress) return inAddress
     return session ? 'order' : 'form'
   })
 
@@ -136,6 +163,9 @@ export default function App() {
   useEffect(() => {
     function onBrowserBack() {
       const wanted = screenInAddress()
+      const depth = historyDepth()
+      setDirection(depth < depthRef.current ? -1 : 1)
+      depthRef.current = depth
       setScreen(canShow(wanted) ? wanted : session ? 'order' : homeScreen)
     }
     window.addEventListener('popstate', onBrowserBack)
@@ -167,6 +197,45 @@ export default function App() {
     return () => window.removeEventListener(SIGNED_OUT_EVENT, onSignedOut)
   }, [t])
 
+  // Opening the quote with nothing in memory (after a reload, or from a later step): load the quote
+  // behind the order from the server.
+  const needsAcceptedQuote = screen === 'quote' && !(profile && recommendation) && Boolean(session)
+  useEffect(() => {
+    if (!needsAcceptedQuote || !session) return
+    let isCurrent = true
+    fetchAcceptedQuote(session.orderId)
+      .then((accepted) => {
+        if (!isCurrent) return
+        setQuoteLoadFailed(false)
+        setProfile(accepted.profile)
+        setRecommendation(accepted.recommendation)
+        setAcceptedRecommendation(accepted.recommendation)
+        setCity(accepted.city)
+        setQuoteVersion((version) => version + 1)
+      })
+      .catch(() => {
+        if (isCurrent) setQuoteLoadFailed(true)
+      })
+    return () => {
+      isCurrent = false
+    }
+  }, [needsAcceptedQuote, session, quoteLoadAttempt])
+
+  // Whether the order can still take a changed quote. Checked again on every page change, as the
+  // order moves on without this page knowing.
+  useEffect(() => {
+    if (!session) return
+    let isCurrent = true
+    fetchOrder(session.orderId)
+      .then((order) => {
+        if (isCurrent) setOrderStatus(order.status)
+      })
+      .catch(() => {})
+    return () => {
+      isCurrent = false
+    }
+  }, [session, screen])
+
   // The profile always shows fresh orders, including any accepted since the page loaded.
   useEffect(() => {
     if (screen === 'profile') {
@@ -176,9 +245,12 @@ export default function App() {
     }
   }, [screen])
 
-  function goTo(newScreen: Screen) {
+  function goTo(newScreen: Screen, towards: 1 | -1 = 1) {
     if (newScreen !== screen) {
-      window.history.pushState({ depth: historyDepth() + 1 }, '', `#/${newScreen}`)
+      const depth = historyDepth() + 1
+      window.history.pushState({ depth }, '', `#/${newScreen}`)
+      depthRef.current = depth
+      setDirection(towards)
       setScreen(newScreen)
     }
     window.scrollTo(0, 0)
@@ -186,11 +258,11 @@ export default function App() {
 
   function goBack() {
     if (historyDepth() > 0) {
-      window.history.back()
+      window.history.back() // The popstate handler above sets the direction.
       return
     }
     const parent = PARENT[screen]
-    goTo(parent === 'home' || parent === undefined ? homeScreen : parent)
+    goTo(parent === 'home' || parent === undefined ? homeScreen : parent, -1)
   }
 
   function followOrder(pointer: OrderPointer) {
@@ -202,7 +274,16 @@ export default function App() {
     setProfile(newProfile)
     setRecommendation(newRecommendation)
     setCity(newCity)
+    setQuoteVersion((version) => version + 1)
     goTo('quote')
+  }
+
+  // Forget the quote in memory, so the next visit to the quote page loads what the server has.
+  function forgetQuote() {
+    setProfile(undefined)
+    setRecommendation(undefined)
+    setAcceptedRecommendation(undefined)
+    setQuoteLoadFailed(false)
   }
 
   function openForm(notice?: string) {
@@ -216,6 +297,9 @@ export default function App() {
     setAcceptedRecommendation(undefined)
     goTo(homeScreen)
   }
+
+  // The order can still take a changed quote: it is not placed, finished or cancelled.
+  const orderCanChange = Boolean(session) && orderStatus !== undefined && !FIXED_ORDER_STATUSES.includes(orderStatus)
 
   async function afterSignIn(signedIn: Account) {
     setAccount(signedIn)
@@ -242,7 +326,7 @@ export default function App() {
     clearProfileDraft()
     setSession(null)
     setAccount(null)
-    setAcceptedRecommendation(undefined)
+    forgetQuote()
     setAuthNotice(t('You are signed out.'))
     goTo('signin')
   }
@@ -257,15 +341,42 @@ export default function App() {
   const firstName = account?.full_name.split(' ')[0]
   const accountButton = account && screen !== 'staff' ? { label: firstName ?? t('Your profile'), onClick: () => goTo('profile') } : undefined
 
+  // The main navigation. Quote and Order are dimmed until there is a quote or an order, and say why.
+  const navItems: NavItem[] = [
+    { key: 'home', label: t('Home'), icon: House, isActive: isHome, isAvailable: true, onSelect: () => goTo(homeScreen) },
+    {
+      key: 'quote',
+      label: t('Quote'),
+      icon: ReceiptText,
+      isActive: screen === 'quote',
+      isAvailable: canShow('quote'),
+      unavailableMessage: t('Your quote appears here once you tell us about your business.'),
+      onSelect: () => goTo('quote'),
+    },
+    {
+      key: 'order',
+      label: t('Order'),
+      icon: Package,
+      isActive: screen === 'order' || screen === 'kyc',
+      isAvailable: Boolean(session),
+      unavailableMessage: t('Your order appears here once you accept a quote.'),
+      onSelect: () => goTo('order'),
+    },
+    { key: 'rates', label: t('Rates'), icon: LayoutGrid, isActive: screen === 'catalogue', isAvailable: true, onSelect: () => goTo('catalogue') },
+    { key: 'profile', label: t('Profile'), icon: User, isActive: screen === 'profile', isAvailable: true, onSelect: () => goTo('profile') },
+  ]
+  // Staff use their own tool, which has no owner navigation.
+  const hasNav = screen !== 'staff'
+
   // Staff have their own sign-in. Everything else starts with an owner's sign-in or sign-up.
   if (screen !== 'staff' && !account) {
     const authScreen: Screen = screen === 'signup' ? 'signup' : 'signin'
     return (
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-dvh flex-col">
         <PageHeader {...TITLES[authScreen]} />
-        <main className="mx-auto w-full max-w-3xl flex-1 px-4">
+        <main className="mx-auto w-full max-w-3xl flex-1 px-4 md:px-6">
           {account === undefined ? (
-            <p className="py-8">{t('Loading…')}</p>
+            <Loading label={t('Loading…')} className="py-6" />
           ) : (
             <>
               {authNotice && (
@@ -284,9 +395,9 @@ export default function App() {
             </>
           )}
         </main>
-        <footer className="mt-10 border-t border-rule">
-          <p className="mx-auto max-w-3xl px-4 py-5">
-            <button type="button" className="text-muted underline underline-offset-4" onClick={() => goTo('staff')}>
+        <footer className="mt-12 border-t border-ink-200">
+          <p className="mx-auto max-w-3xl px-4 py-4 md:px-6">
+            <button type="button" className="link text-small font-medium text-ink-500" onClick={() => goTo('staff')}>
               {t('Staff sign in')}
             </button>
           </p>
@@ -296,13 +407,18 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    // On a phone the page leaves room at the bottom for the floating navigation.
+    <div className={`flex min-h-dvh flex-col ${hasNav ? 'pb-(--nav-offset)' : ''}`}>
       <PageHeader
         {...TITLES[screen]}
         isCompact={!isHome && screen !== 'catalogue'}
         onBack={isHome ? undefined : goBack}
         account={accountButton}
+        navItems={hasNav ? navItems : undefined}
+        onHome={() => goTo(homeScreen)}
+        wide={screen === 'catalogue' || screen === 'staff'}
       />
+      <OfflineBanner />
       {step && (
         <JourneySteps
           current={step}
@@ -310,10 +426,11 @@ export default function App() {
           canOpen={(key) => (key === 'choose' ? true : key === 'quote' ? canShow('quote') : Boolean(session))}
         />
       )}
+      <PageTransition id={screen} direction={direction} className="flex flex-1 flex-col">
       {screen === 'catalogue' ? (
         <CataloguePage plan={plan} onPlanChange={setPlan} onReviewed={showQuote} />
       ) : (
-        <main className="mx-auto w-full max-w-3xl flex-1 px-4">
+        <main className={`mx-auto w-full flex-1 px-4 md:px-6 ${screen === 'staff' ? 'max-w-5xl' : 'max-w-3xl'}`}>
           <div hidden={screen !== 'advisor'}>
             <AdvisorChat onDone={showQuote} onUseForm={openForm} />
           </div>
@@ -321,43 +438,108 @@ export default function App() {
           <div hidden={screen !== 'form'}>
             <GuidedForm notice={formNotice} onDone={showQuote} />
           </div>
+          {screen === 'quote' && needsAcceptedQuote && (
+            quoteLoadFailed ? (
+              <EmptyState
+                role="alert"
+                picture="offline"
+                title={t('Your quote did not load. Check your connection, then try again.')}
+                action={
+                  <>
+                    <Button
+                      onClick={() => {
+                        setQuoteLoadFailed(false)
+                        setQuoteLoadAttempt((attempt) => attempt + 1)
+                      }}
+                    >
+                      {t('Try again')}
+                    </Button>
+                    <Button variant="secondary" onClick={() => goTo('order')}>
+                      {t('Back to my order')}
+                    </Button>
+                  </>
+                }
+              />
+            ) : (
+              // The shape of the quote page, so nothing jumps when the real one arrives.
+              <Loading label={t('Loading your quote…')} className="space-y-4 pt-6">
+                <Skeleton className="h-44 w-full rounded-card" />
+                <div className="card space-y-4">
+                  <Skeleton className="h-6 w-1/3" />
+                  {[0, 1, 2].map((index) => (
+                    <div key={index} className="flex items-center gap-3">
+                      <Skeleton className="size-11 rounded-control" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-2/3" />
+                        <Skeleton className="h-3 w-1/3" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Loading>
+            )
+          )}
           {screen === 'quote' && profile && recommendation && (
             <>
-              {homeScreen === 'advisor' && (
-                <button type="button" className="mb-4 font-medium text-accent underline underline-offset-4" onClick={() => goTo('advisor')}>
-                  {t('Correct my answers')}
+              {/* Every earlier step stays open: the answers, the short form and the rate list. */}
+              <p className="-mb-2 flex flex-wrap gap-x-6 pt-3">
+                {homeScreen === 'advisor' && (
+                  <button type="button" className="link text-small" onClick={() => goTo('advisor')}>
+                    {t('Correct my answers')}
+                  </button>
+                )}
+                <button type="button" className="link text-small" onClick={() => goTo('catalogue')}>
+                  {t('See the full rate list')}
                 </button>
-              )}
+              </p>
               <QuotePage
+                key={quoteVersion}
                 profile={profile}
                 recommendation={recommendation}
                 city={city}
                 isAccepted={Boolean(session) && recommendation === acceptedRecommendation}
+                replaceOrderId={session && orderCanChange ? session.orderId : undefined}
                 onBack={goBack}
                 onViewOrder={() => goTo('order')}
                 onSaved={(saved) => {
                   followOrder({ orderId: saved.order_id, businessId: saved.business_id, hasGstin: profile.has_gstin })
-                  setAcceptedRecommendation(recommendation)
                   if (recommendation.chosen_by === 'owner') setPlan({}) // The plan is now an order.
+                  // The server now holds exactly what was accepted, including any changes made on
+                  // the page. The quote page loads that next time, so it never shows an older copy.
+                  forgetQuote()
+                  setOrderStatus(undefined)
+                  toast({ tone: 'success', message: t('Your quote is accepted. Next, verify your business.') })
                   goTo('order')
                 }}
               />
             </>
           )}
           {screen === 'order' && session && (
-            <OrderPage orderId={session.orderId} onVerify={() => goTo('kyc')} onStartAgain={startAgain} />
+            <OrderPage
+              orderId={session.orderId}
+              onVerify={() => goTo('kyc')}
+              onStartAgain={startAgain}
+              onOpenQuote={() => goTo('quote')}
+              onFindMore={() => goTo(homeScreen)}
+            />
           )}
           {screen === 'kyc' && session && (
-            <KycPage businessId={session.businessId} hasGstin={session.hasGstin} onBack={() => goTo('order')} />
+            <Suspense fallback={<Loading label={t('Loading…')} className="py-6" />}>
+              <KycPage
+                businessId={session.businessId}
+                hasGstin={session.hasGstin}
+                onBack={() => goTo('order')}
+                onOpenQuote={() => goTo('quote')}
+              />
+            </Suspense>
           )}
           {/* Signed in already, so the sign-in pages have nothing to show. Offer the main task instead. */}
           {(screen === 'signin' || screen === 'signup') && (
-            <div className="py-8">
-              <p>{t('You are signed in.')}</p>
-              <button type="button" className="mt-3 bg-accent px-6 py-3 font-semibold text-white" onClick={() => goTo(homeScreen)}>
-                {t('Find the right bundle')}
-              </button>
-            </div>
+            <EmptyState
+              picture="box"
+              title={t('You are signed in.')}
+              action={<Button onClick={() => goTo(homeScreen)}>{t('Find the right bundle')}</Button>}
+            />
           )}
           {screen === 'profile' && account && (
             <ProfilePage
@@ -366,35 +548,43 @@ export default function App() {
               onAccountChange={setAccount}
               onOpenOrder={(business, orderId) => {
                 followOrder({ orderId, businessId: business.business_id, hasGstin: business.has_gstin })
+                forgetQuote() // A different order has a different quote.
+                setOrderStatus(undefined)
                 goTo('order')
               }}
               onSignOut={signOutHere}
             />
           )}
-          {screen === 'staff' && <StaffPage onExit={() => goTo(session ? 'order' : homeScreen)} />}
+          {screen === 'staff' && (
+            <Suspense fallback={<Loading label={t('Loading…')} className="py-6" />}>
+              <StaffPage onExit={() => goTo(session ? 'order' : homeScreen)} />
+            </Suspense>
+          )}
         </main>
       )}
+      </PageTransition>
       {screen !== 'staff' && (
-        <footer className="mt-10 border-t border-rule">
-          <p className="mx-auto flex max-w-3xl flex-wrap gap-x-6 gap-y-2 px-4 py-5">
+        <footer className="mt-12 border-t border-ink-200">
+          <p className="mx-auto flex max-w-3xl flex-wrap gap-x-6 px-4 py-3 md:px-6">
             <button
               type="button"
-              className="font-medium text-accent underline underline-offset-4"
+              className="link text-small"
               onClick={() => (screen === 'catalogue' ? goBack() : goTo('catalogue'))}
             >
               {t(screen === 'catalogue' ? 'Find the right bundle' : 'See the full rate list')}
             </button>
             {session && screen !== 'order' && (
-              <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={() => goTo('order')}>
+              <button type="button" className="link text-small" onClick={() => goTo('order')}>
                 {t('Track my order')}
               </button>
             )}
-            <button type="button" className="text-muted underline underline-offset-4" onClick={() => goTo('staff')}>
+            <button type="button" className="link text-small font-medium text-ink-500" onClick={() => goTo('staff')}>
               {t('Staff sign in')}
             </button>
           </p>
         </footer>
       )}
+      {hasNav && <BottomNav items={navItems} />}
     </div>
   )
 }

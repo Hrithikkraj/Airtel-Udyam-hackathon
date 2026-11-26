@@ -1,214 +1,884 @@
 @import "tailwindcss";
 
-/* Design tokens. Tailwind turns these into classes such as bg-accent and text-muted.
-   One accent colour, used only for actions, links and "you are here".
-   Green, amber and red are used only to show a status, always as soft tints. */
+/* ==========================================================================
+   Accel Business design system.
+   Tailwind turns every token below into classes, such as bg-brand-600, text-ink-500 or shadow-e2.
+
+   Rules that keep it clear for a first-time shop owner:
+   - Solid brand red is only for the one main action on a screen and for "you are here".
+   - Errors are never solid red: always a soft tint, an icon and words, so they cannot be
+     mistaken for a button.
+   - Status colours (success, warn, danger) are tints with dark text, so text stays AA readable.
+   ========================================================================== */
 @theme {
-  --color-ink: #1d2733; /* Main text */
-  --color-muted: #5e6977; /* Secondary text */
-  --color-rule: #dde2e8; /* Dividers and panel borders */
-  --color-field: #848e9b; /* Input and secondary button borders: 3:1 contrast, so fields stay visible */
-  --color-paper: #f4f6f8; /* Page background */
-  --color-accent: #2f5d8a; /* Actions and links */
-  --color-accent-strong: #244a70;
-  --color-accent-soft: #eaf1f8;
-  --color-success: #2f7a57;
-  --color-success-soft: #e7f3ec;
-  --color-warn: #8a5a00;
-  --color-warn-soft: #fbf3e2;
-  --color-danger: #b3261e;
-  --color-danger-soft: #fbeaea;
-  /* One family for everything. Mukta includes Devanagari, so Hindi matches English. */
-  --font-display: "Mukta", system-ui, sans-serif;
-  --font-body: "Mukta", system-ui, sans-serif;
-}
+  /* ---------- Brand red ---------- */
+  --color-brand-50: #fff1f1;
+  --color-brand-100: #ffdfdf;
+  --color-brand-200: #ffc4c4;
+  --color-brand-300: #ff9a9a;
+  --color-brand-400: #ff5c5c;
+  --color-brand-500: #e40000; /* Large shapes and gradients */
+  --color-brand-600: #da0a0a; /* Main actions: 5.2:1 with white text, 4.7:1 on brand-50 */
+  --color-brand-700: #b80808; /* Pressed state, links on tinted surfaces */
+  --color-brand-800: #960a0a;
+  --color-brand-900: #7a0e0e;
 
-body {
-  background: var(--color-paper);
-  color: var(--color-ink);
-  font-family: var(--font-body);
-  font-size: 1rem;
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
-}
+  /* ---------- Warm ink neutrals ---------- */
+  --color-ink-50: #f8f7f5; /* Page */
+  --color-ink-100: #efeeec; /* Quiet surfaces */
+  --color-ink-200: #e3e3e6; /* Hairlines */
+  --color-ink-300: #c9cace;
+  --color-ink-400: #8d8f97; /* Input borders: 3.2:1, so fields stay visible */
+  --color-ink-500: #6a6d76; /* Secondary text: 5:1 on white */
+  --color-ink-600: #52555e;
+  --color-ink-700: #3a3d46;
+  --color-ink-800: #23262e;
+  --color-ink-900: #14161c; /* Main text */
 
-h1,
-h2,
-h3 {
-  letter-spacing: -0.01em;
-}
+  /* ---------- Status ---------- */
+  --color-success-50: #ecfdf3;
+  --color-success-100: #d1fadf;
+  --color-success-200: #a6f4c5;
+  --color-success-300: #6ce9a6;
+  --color-success-400: #32d583;
+  --color-success-500: #12b76a;
+  --color-success-600: #039855;
+  --color-success-700: #067647;
+  --color-success-800: #05603a;
+  --color-success-900: #054f31;
 
-/* Rounded controls everywhere, so the app feels like one piece. */
-button,
-select,
-input:not([type="checkbox"]):not([type="radio"]),
-textarea {
-  border-radius: 0.5rem;
-}
+  --color-warn-50: #fffaeb;
+  --color-warn-100: #fef0c7;
+  --color-warn-200: #fedf89;
+  --color-warn-300: #fec84b;
+  --color-warn-400: #fdb022;
+  --color-warn-500: #f79009;
+  --color-warn-600: #dc6803;
+  --color-warn-700: #b54708;
+  --color-warn-800: #93370d;
+  --color-warn-900: #7a2e0e;
 
-input:not([type="checkbox"]):not([type="radio"]),
-select {
-  border-color: var(--color-field);
-}
+  --color-danger-50: #fef3f2;
+  --color-danger-100: #fee4e2;
+  --color-danger-200: #fecdca;
+  --color-danger-300: #fda29b;
+  --color-danger-400: #f97066;
+  --color-danger-500: #f04438;
+  --color-danger-600: #d92d20;
+  --color-danger-700: #b42318;
+  --color-danger-800: #912018;
+  --color-danger-900: #7a271a;
 
-input:not([type="checkbox"]):not([type="radio"]):hover,
-select:hover {
-  border-color: var(--color-muted);
-}
+  --color-info-50: #eff6ff;
+  --color-info-100: #dbeafe;
+  --color-info-200: #bfdbfe;
+  --color-info-300: #93c5fd;
+  --color-info-400: #60a5fa;
+  --color-info-500: #3b82f6;
+  --color-info-600: #2563eb;
+  --color-info-700: #1d4ed8;
+  --color-info-800: #1e40af;
+  --color-info-900: #1e3a8a;
 
-input:not([type="checkbox"]):not([type="radio"]):focus,
-select:focus {
-  border-color: var(--color-accent);
-  outline: 2px solid var(--color-accent-soft);
-  outline-offset: 0;
-}
+  /* ---------- Older names, kept so every screen keeps working while it is redesigned ---------- */
+  --color-ink: var(--color-ink-900);
+  --color-muted: var(--color-ink-500);
+  --color-rule: var(--color-ink-200);
+  --color-field: var(--color-ink-400);
+  --color-paper: var(--color-ink-50);
+  --color-accent: var(--color-brand-600);
+  --color-accent-strong: var(--color-brand-700);
+  --color-accent-soft: var(--color-brand-50);
+  --color-success: var(--color-success-700);
+  --color-success-soft: var(--color-success-50);
+  --color-warn: var(--color-warn-700);
+  --color-warn-soft: var(--color-warn-50);
+  --color-danger: var(--color-danger-700);
+  --color-danger-soft: var(--color-danger-50);
 
-input[aria-invalid="true"] {
-  border-color: var(--color-danger);
-}
+  /* ---------- Type ----------
+     Plus Jakarta Sans for Latin. It has no Devanagari, so the browser takes Hindi letters from
+     Mukta, glyph by glyph, and the two sit well together. */
+  --font-sans: "Plus Jakarta Sans", "Mukta", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Plus Jakarta Sans", "Mukta", system-ui, sans-serif;
+  --font-body: "Plus Jakarta Sans", "Mukta", system-ui, sans-serif;
 
-/* Keyboard users can always see where they are. */
-a:focus-visible,
-button:focus-visible,
-select:focus-visible,
-input:focus-visible,
-summary:focus-visible,
-label:has(input:focus-visible) {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
+  --text-display: 2rem;
+  --text-display--line-height: 2.375rem;
+  --text-display--font-weight: 800;
+  --text-title-1: 1.5rem;
+  --text-title-1--line-height: 1.875rem;
+  --text-title-2: 1.25rem;
+  --text-title-2--line-height: 1.75rem;
+  --text-body: 1rem;
+  --text-body--line-height: 1.625rem;
+  --text-small: 0.875rem;
+  --text-small--line-height: 1.375rem;
+  --text-caption: 0.8125rem; /* 13px: the smallest size, so Hindi stays readable */
+  --text-caption--line-height: 1.125rem;
+  --text-price: 2.75rem;
+  --text-price--line-height: 3rem;
+  --text-price--font-weight: 800;
 
-/* Buttons filled with the accent darken a little on hover. */
-.bg-accent:hover:not(:disabled) {
-  background-color: var(--color-accent-strong);
-}
+  /* ---------- Shape ---------- */
+  --radius-sm: 0.625rem; /* 10px: small chips and badges inside cards */
+  --radius-control: 0.875rem; /* 14px: buttons and inputs */
+  --radius-card: 1.25rem; /* 20px: cards */
+  --radius-sheet: 1.75rem; /* 28px: the top corners of sheets */
 
-/* ---------- Panels: the white surfaces content sits on ---------- */
-.panel {
-  background: white;
-  border: 1px solid var(--color-rule);
-  border-radius: 0.75rem;
-  padding: 1rem;
-}
-@media (min-width: 640px) {
-  .panel {
-    padding: 1.25rem 1.5rem;
+  /* ---------- Depth: soft layered shadows instead of hard borders ---------- */
+  --shadow-e1: 0 1px 2px rgb(20 22 28 / 0.06), 0 1px 1px rgb(20 22 28 / 0.04);
+  --shadow-e2: 0 4px 12px rgb(20 22 28 / 0.06), 0 2px 4px rgb(20 22 28 / 0.04);
+  --shadow-e3: 0 12px 32px rgb(20 22 28 / 0.1), 0 4px 8px rgb(20 22 28 / 0.04);
+  --shadow-brand: 0 8px 20px rgb(218 10 10 / 0.28);
+
+  /* ---------- Motion ---------- */
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1); /* Entrances */
+  --ease-in-soft: cubic-bezier(0.4, 0, 1, 1); /* Exits */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* Taps: a small overshoot */
+
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-fade-in: fade-in 200ms var(--ease-out-soft) both;
+  --animate-rise-in: rise-in 320ms var(--ease-out-soft) both;
+  --animate-sheet-in: sheet-in 320ms var(--ease-out-soft) both;
+  --animate-panel-in: panel-in 320ms var(--ease-out-soft) both;
+  --animate-pulse-ring: pulse-ring 1.8s var(--ease-out-soft) infinite;
+  --animate-typing: typing 1.2s ease-in-out infinite;
+  --animate-draw: draw 480ms var(--ease-out-soft) both;
+  --animate-pop: pop 320ms var(--ease-spring) both;
+  --animate-confetti: confetti 1000ms var(--ease-out-soft) both;
+
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes sheet-in {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  @keyframes panel-in {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(1); opacity: 0.55; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+  @keyframes typing {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+  @keyframes draw {
+    from { stroke-dashoffset: var(--draw-length, 48); }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.6); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  /* Each piece flies out to its own spot (--dx, --dy), then drops a little and fades. */
+  @keyframes confetti {
+    0% { opacity: 1; transform: translate(0, 0) rotate(0); }
+    65% { opacity: 1; transform: translate(var(--dx), var(--dy)) rotate(var(--spin)); }
+    100% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) + 48px)) rotate(var(--spin)); }
   }
 }
 
-.section-title {
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 600;
-  line-height: 1.3;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--color-rule);
+/* ==========================================================================
+   Base
+   ========================================================================== */
+@layer base {
+  /* The space the floating bottom navigation takes on a phone. Bars that stick to the bottom of a
+     page sit above it, and pages leave this much room at the end. Computers have no bottom bar. */
+  :root {
+    --nav-offset: calc(5.25rem + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 768px) {
+    :root {
+      --nav-offset: 0px;
+    }
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background: var(--color-ink-50);
+    color: var(--color-ink-900);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    line-height: 1.625;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Hindi needs more room above and below, so vowel marks are never cut off. */
+  :lang(hi) body {
+    line-height: 1.75;
+  }
+  :lang(hi) h1,
+  :lang(hi) h2,
+  :lang(hi) h3 {
+    line-height: 1.35;
+    letter-spacing: 0;
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Numbers that change, such as prices, keep their width so nothing jumps. */
+  .tabular-nums,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Rounded controls everywhere, so the app feels like one piece. */
+  button,
+  select,
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea {
+    border-radius: var(--radius-control);
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    border-color: var(--color-ink-400);
+    transition:
+      border-color 120ms var(--ease-out-soft),
+      box-shadow 120ms var(--ease-out-soft);
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):hover,
+  select:hover,
+  textarea:hover {
+    border-color: var(--color-ink-500);
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):focus,
+  select:focus,
+  textarea:focus {
+    border-color: var(--color-brand-600);
+    box-shadow: 0 0 0 4px var(--color-brand-100);
+    outline: none;
+  }
+
+  input[aria-invalid="true"],
+  select[aria-invalid="true"] {
+    border-color: var(--color-danger-600);
+  }
+  input[aria-invalid="true"]:focus {
+    box-shadow: 0 0 0 4px var(--color-danger-100);
+  }
+
+  ::placeholder {
+    color: var(--color-ink-500);
+    opacity: 1;
+  }
+
+  /* Keyboard users can always see where they are: a two-tone ring that shows on any background. */
+  a:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  [role="switch"]:focus-visible,
+  [role="tab"]:focus-visible,
+  summary:focus-visible,
+  [tabindex]:focus-visible,
+  label:has(input:focus-visible) {
+    outline: 3px solid var(--color-brand-600);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px white;
+  }
+  /* Headings that receive focus after a step change should not show a heavy ring. */
+  h1[tabindex="-1"]:focus,
+  h2[tabindex="-1"]:focus,
+  h3[tabindex="-1"]:focus {
+    outline: none;
+    box-shadow: none;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--color-brand-600);
+  }
+
+  /* Native selects get our own arrow, so they match on Android, iOS and desktop. */
+  select:not([multiple]) {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236a6d76' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.5rem;
+  }
+
+  /* Number inputs without the tiny browser spinners, which are too small to tap. */
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  summary {
+    list-style: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  ::selection {
+    background: var(--color-brand-100);
+    color: var(--color-ink-900);
+  }
 }
 
-/* ---------- Messages: one look for each job ---------- */
-.notice,
-.notice-warn,
-.notice-error,
-.notice-success {
-  border-left: 3px solid;
-  border-radius: 0 0.5rem 0.5rem 0;
-  padding: 0.5rem 0.75rem;
-}
-.notice {
-  border-color: var(--color-accent);
-  background: var(--color-accent-soft);
-}
-.notice-warn {
-  border-color: #c99a3b;
-  background: var(--color-warn-soft);
-}
-.notice-error {
-  border-color: var(--color-danger);
-  background: var(--color-danger-soft);
-}
-.notice-success {
-  border-color: var(--color-success);
-  background: var(--color-success-soft);
+/* ==========================================================================
+   Components: the building blocks every screen uses
+   ========================================================================== */
+@layer components {
+  /* ---------- Surfaces ---------- */
+  .card {
+    background: white;
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-e2);
+    padding: 1.25rem;
+  }
+  @media (min-width: 640px) {
+    .card {
+      padding: 1.5rem;
+    }
+  }
+  .card-flat {
+    background: white;
+    border-radius: var(--radius-card);
+    border: 1px solid var(--color-ink-200);
+    padding: 1.25rem;
+  }
+  /* Cards that open something lift a little under a mouse. Not on touch screens. */
+  @media (hover: hover) and (pointer: fine) {
+    .card-interactive {
+      transition:
+        transform 200ms var(--ease-out-soft),
+        box-shadow 200ms var(--ease-out-soft);
+    }
+    .card-interactive:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-e3);
+    }
+  }
+
+  /* The old name for a card, used by screens that are not redesigned yet. */
+  .panel {
+    background: white;
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-e2);
+    padding: 1.25rem;
+  }
+  @media (min-width: 640px) {
+    .panel {
+      padding: 1.5rem;
+    }
+  }
+
+  .section-title {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 700;
+    line-height: 1.4;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.25rem;
+    border-bottom: 1px solid var(--color-ink-200);
+  }
+
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-500);
+  }
+  :lang(hi) .eyebrow {
+    letter-spacing: 0;
+    font-size: 0.8125rem;
+  }
+
+  /* ---------- Buttons: 48px tall, so they are easy to tap ---------- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 3rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: var(--radius-control);
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      transform 120ms var(--ease-spring),
+      background-color 120ms var(--ease-out-soft),
+      box-shadow 200ms var(--ease-out-soft),
+      color 120ms var(--ease-out-soft);
+  }
+  .btn:active:not(:disabled):not([aria-disabled="true"]) {
+    transform: scale(0.97);
+  }
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+  .btn-sm {
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.9375rem;
+  }
+  .btn-lg {
+    min-height: 3.5rem;
+    padding: 1rem 1.5rem;
+    font-size: 1.0625rem;
+  }
+  .btn-block {
+    width: 100%;
+  }
+
+  .btn-primary {
+    background: var(--color-brand-600);
+    color: white;
+    box-shadow: var(--shadow-brand);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-brand-700);
+  }
+  .btn-secondary {
+    background: white;
+    color: var(--color-ink-900);
+    box-shadow: inset 0 0 0 1.5px var(--color-ink-300);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    box-shadow: inset 0 0 0 1.5px var(--color-ink-500);
+    background: var(--color-ink-50);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-brand-700);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--color-brand-50);
+  }
+  .btn-quiet {
+    background: var(--color-ink-100);
+    color: var(--color-ink-900);
+  }
+  .btn-quiet:hover:not(:disabled) {
+    background: var(--color-ink-200);
+  }
+
+  /* A text link styled as a button, still with a 44px tap area. */
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 2.75rem;
+    font-weight: 600;
+    color: var(--color-brand-700);
+    text-decoration: underline;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 4px;
+    cursor: pointer;
+  }
+  .link:hover {
+    color: var(--color-brand-800);
+  }
+
+  /* An icon-only button: always 44px. */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    color: var(--color-ink-700);
+    transition:
+      background-color 120ms var(--ease-out-soft),
+      transform 120ms var(--ease-spring);
+  }
+  .icon-btn:hover:not(:disabled) {
+    background: var(--color-ink-100);
+  }
+  .icon-btn:active:not(:disabled) {
+    transform: scale(0.92);
+  }
+  .icon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* ---------- Inputs ---------- */
+  .input {
+    display: block;
+    width: 100%;
+    min-height: 3rem;
+    border: 1.5px solid var(--color-ink-400);
+    background: white;
+    padding: 0.75rem 0.875rem;
+    font-size: 1rem; /* 16px stops phones zooming in on focus */
+    color: var(--color-ink-900);
+  }
+  .input-lg {
+    min-height: 3.5rem;
+    font-size: 1.0625rem;
+  }
+
+  .field-label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    color: var(--color-ink-800);
+    margin-bottom: 0.375rem;
+  }
+  .field-hint {
+    display: block;
+    margin-top: 0.375rem;
+    font-size: 0.875rem;
+    color: var(--color-ink-500);
+  }
+  .field-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.375rem;
+    margin-top: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-danger-700);
+  }
+
+  /* Floating label: the label sits inside the field and moves up when there is text. */
+  .float-field {
+    position: relative;
+  }
+  .float-field > .input {
+    padding-top: 1.375rem;
+    padding-bottom: 0.375rem;
+    min-height: 3.5rem;
+  }
+  .float-field > .float-label {
+    position: absolute;
+    left: 0.9375rem;
+    top: 1rem;
+    color: var(--color-ink-500);
+    font-size: 1rem;
+    pointer-events: none;
+    transform-origin: left top;
+    transition:
+      transform 200ms var(--ease-out-soft),
+      color 120ms var(--ease-out-soft);
+  }
+  .float-field > .input:focus + .float-label,
+  .float-field > .input:not(:placeholder-shown) + .float-label {
+    transform: translateY(-0.625rem) scale(0.8);
+    color: var(--color-ink-700);
+    font-weight: 600;
+  }
+  .float-field > .input:focus + .float-label {
+    color: var(--color-brand-700);
+  }
+
+  /* ---------- Chips ---------- */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    background: white;
+    box-shadow: inset 0 0 0 1.5px var(--color-ink-200);
+    color: var(--color-ink-800);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    line-height: 1.3;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color 200ms var(--ease-out-soft),
+      box-shadow 200ms var(--ease-out-soft),
+      color 200ms var(--ease-out-soft),
+      transform 120ms var(--ease-spring);
+  }
+  .chip:hover {
+    box-shadow: inset 0 0 0 1.5px var(--color-ink-400);
+  }
+  .chip:active {
+    transform: scale(0.96);
+  }
+  .chip[aria-pressed="true"],
+  .chip[aria-selected="true"],
+  .chip-active {
+    background: var(--color-ink-900);
+    color: white;
+    box-shadow: none;
+  }
+
+  /* ---------- Status badges ---------- */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    padding: 0.2rem 0.65rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+  .badge-success {
+    background: var(--color-success-50);
+    color: var(--color-success-700);
+    box-shadow: inset 0 0 0 1px var(--color-success-200);
+  }
+  .badge-warn {
+    background: var(--color-warn-50);
+    color: var(--color-warn-700);
+    box-shadow: inset 0 0 0 1px var(--color-warn-200);
+  }
+  .badge-danger {
+    background: var(--color-danger-50);
+    color: var(--color-danger-700);
+    box-shadow: inset 0 0 0 1px var(--color-danger-200);
+  }
+  .badge-neutral {
+    background: var(--color-ink-100);
+    color: var(--color-ink-700);
+  }
+  .badge-brand {
+    background: var(--color-brand-50);
+    color: var(--color-brand-700);
+    box-shadow: inset 0 0 0 1px var(--color-brand-100);
+  }
+  .badge-info {
+    background: var(--color-info-50);
+    color: var(--color-info-700);
+    box-shadow: inset 0 0 0 1px var(--color-info-100);
+  }
+
+  /* ---------- Messages: a tint, an edge and words, never a solid colour ---------- */
+  .notice,
+  .notice-warn,
+  .notice-error,
+  .notice-success {
+    border-radius: var(--radius-control);
+    padding: 0.75rem 1rem;
+    box-shadow: inset 3px 0 0 0 currentColor;
+  }
+  .notice {
+    background: var(--color-info-50);
+    color: var(--color-ink-900);
+    box-shadow: inset 3px 0 0 0 var(--color-info-600);
+  }
+  .notice-warn {
+    background: var(--color-warn-50);
+    color: var(--color-ink-900);
+    box-shadow: inset 3px 0 0 0 var(--color-warn-500);
+  }
+  .notice-error {
+    background: var(--color-danger-50);
+    color: var(--color-danger-800);
+    box-shadow: inset 3px 0 0 0 var(--color-danger-600);
+  }
+  .notice-success {
+    background: var(--color-success-50);
+    color: var(--color-success-800);
+    box-shadow: inset 3px 0 0 0 var(--color-success-600);
+  }
+
+  /* A product's conditions on the rate list: quieter than a message. */
+  .note {
+    border-left: 2px solid var(--color-ink-300);
+    padding-left: 0.625rem;
+    color: var(--color-ink-600);
+  }
+
+  /* ---------- Bars that stay at the bottom of the screen ---------- */
+  .sticky-bar {
+    background: rgb(255 255 255 / 0.92);
+    backdrop-filter: saturate(1.6) blur(16px);
+    -webkit-backdrop-filter: saturate(1.6) blur(16px);
+    box-shadow: 0 -1px 0 var(--color-ink-200), 0 -8px 24px rgb(20 22 28 / 0.06);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Translucent glass: only on bars over content, where it shows the page is still there. */
+  .glass {
+    background: rgb(255 255 255 / 0.82);
+    backdrop-filter: saturate(1.6) blur(18px);
+    -webkit-backdrop-filter: saturate(1.6) blur(18px);
+  }
+
+  /* ---------- Tappable choices: the whole tile is the target ---------- */
+  .choice {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    min-height: 3.25rem;
+    border-radius: var(--radius-control);
+    background: white;
+    box-shadow: inset 0 0 0 1.5px var(--color-ink-200);
+    padding: 0.875rem 1rem;
+    cursor: pointer;
+    transition:
+      box-shadow 200ms var(--ease-out-soft),
+      background-color 200ms var(--ease-out-soft),
+      transform 120ms var(--ease-spring);
+  }
+  .choice:hover {
+    box-shadow: inset 0 0 0 1.5px var(--color-ink-400);
+  }
+  .choice:active {
+    transform: scale(0.985);
+  }
+  .choice:has(input:checked) {
+    box-shadow: inset 0 0 0 2px var(--color-brand-600);
+    background: var(--color-brand-50);
+  }
+
+  /* ---------- Chat ---------- */
+  .bubble-advisor {
+    background: white;
+    box-shadow: var(--shadow-e1);
+    border-radius: 0.375rem 1.25rem 1.25rem 1.25rem;
+    padding: 0.75rem 1rem;
+  }
+  .bubble-owner {
+    background: var(--color-brand-600);
+    color: white;
+    border-radius: 1.25rem 0.375rem 1.25rem 1.25rem;
+    padding: 0.75rem 1rem;
+  }
+
+  /* ---------- Sheets ---------- */
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgb(20 22 28 / 0.45);
+    animation: var(--animate-fade-in);
+  }
+  .sheet {
+    background: white;
+    box-shadow: var(--shadow-e3);
+    overscroll-behavior: contain;
+  }
+
+  /* ---------- Loading placeholders ---------- */
+  .skeleton {
+    display: block;
+    border-radius: 0.5rem;
+    background: linear-gradient(
+      90deg,
+      var(--color-ink-100) 0%,
+      var(--color-ink-200) 40%,
+      var(--color-ink-100) 80%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  /* A light sweep across something being worked on, such as a document being read. */
+  .scanning {
+    position: relative;
+    overflow: hidden;
+  }
+  .scanning::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.7) 50%, transparent 80%);
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  /* ---------- Brand backgrounds for hero areas ---------- */
+  /* Kept dark enough that white text stays above 4.5:1 everywhere on it, highlight included. */
+  .brand-mesh {
+    background:
+      radial-gradient(120% 80% at 100% 0%, rgb(255 92 92 / 0.22) 0%, transparent 55%),
+      radial-gradient(90% 70% at 0% 100%, rgb(122 14 14 / 0.6) 0%, transparent 60%),
+      linear-gradient(135deg, var(--color-brand-600) 0%, var(--color-brand-800) 100%);
+    color: white;
+  }
+  .soft-mesh {
+    background:
+      radial-gradient(70% 60% at 100% 0%, var(--color-brand-50) 0%, transparent 70%),
+      radial-gradient(60% 60% at 0% 100%, var(--color-ink-100) 0%, transparent 70%),
+      white;
+  }
 }
 
-/* A product's conditions on the rate list: quieter than a message. */
-.note {
-  border-left: 2px solid var(--color-field);
-  padding-left: 0.5rem;
-  color: var(--color-muted);
+/* ==========================================================================
+   Small helpers
+   ========================================================================== */
+@utility pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility px-safe {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
-/* ---------- Status badges ---------- */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  border-radius: 999px;
-  padding: 0.1rem 0.6rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.badge-success {
-  background: var(--color-success-soft);
-  color: var(--color-success);
-}
-.badge-warn {
-  background: var(--color-warn-soft);
-  color: var(--color-warn);
-}
-.badge-danger {
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-}
-.badge-neutral {
-  background: var(--color-paper);
-  color: var(--color-muted);
-}
-
-/* ---------- Bars that stay at the bottom of the screen ---------- */
-.sticky-bar {
-  background: white;
-  border-top: 1px solid var(--color-rule);
-  box-shadow: 0 -4px 12px rgb(29 39 51 / 0.06);
-}
-
-/* ---------- Tappable choices: the whole tile is the target ---------- */
-.choice {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  border: 1px solid var(--color-field);
-  border-radius: 0.5rem;
-  background: white;
-  padding: 0.625rem 0.75rem;
-  cursor: pointer;
-}
-.choice:hover {
-  border-color: var(--color-muted);
-}
-.choice:has(input:checked) {
-  border-color: var(--color-accent);
-  background: var(--color-accent-soft);
-}
-
-input[type="checkbox"],
-input[type="radio"] {
-  accent-color: var(--color-accent);
-}
-
-/* ---------- Chat ---------- */
-.bubble-advisor {
-  background: white;
-  border: 1px solid var(--color-rule);
-  border-radius: 0.25rem 0.75rem 0.75rem 0.75rem;
-  padding: 0.5rem 0.75rem;
-}
-.bubble-owner {
-  background: var(--color-accent);
-  color: white;
-  border-radius: 0.75rem 0.25rem 0.75rem 0.75rem;
-  padding: 0.5rem 0.75rem;
+/* ==========================================================================
+   Reduced motion: no movement anywhere. Changes still happen, instantly.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton,
+  .scanning::after {
+    animation: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {

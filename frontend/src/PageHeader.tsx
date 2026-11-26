@@ -1,59 +1,41 @@
+import { ArrowLeft } from 'lucide-react'
 import { useLanguage } from './i18n'
+import type { NavItem } from './navigation'
+import TopBar from './TopBar'
+import { cx } from './ui/cx'
 
 type Props = {
   title: string
   intro: string
-  isCompact?: boolean // Kept for callers. Every page now uses the same calm layout.
+  isCompact?: boolean // Inner pages get a smaller title, so their content starts higher on a phone.
   onBack?: () => void
   account?: { label: string; onClick: () => void }
+  navItems?: NavItem[]
+  onHome?: () => void
+  wide?: boolean // Lines the title up with pages that use a wider grid, such as the rate list.
 }
 
-// A slim white bar with the brand, account and language, then the page's own title.
-export default function PageHeader({ title, intro, onBack, account }: Props) {
-  const { language, setLanguage, t } = useLanguage()
+// The top bar, then the page's own title: a large, friendly heading with one line of help under it.
+export default function PageHeader({ title, intro, isCompact = false, onBack, account, navItems, onHome, wide = false }: Props) {
+  const { t } = useLanguage()
   return (
     <>
-      <header className="border-b border-rule bg-white">
-        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-4 px-4">
-          <p className="flex items-center gap-2 font-semibold">
-            <span aria-hidden="true" className="flex size-7 items-center justify-center rounded-md bg-accent text-sm font-bold text-white">
-              A
-            </span>
-            Accel Business
-          </p>
-          <div className="flex items-center gap-1">
-            {account && (
-              <button
-                type="button"
-                className="flex max-w-[10rem] items-center gap-2 rounded-lg px-2 py-1.5 font-medium hover:bg-paper"
-                onClick={account.onClick}
-              >
-                <span aria-hidden="true" className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent">
-                  {account.label.charAt(0).toUpperCase()}
-                </span>
-                <span className="truncate">{account.label}</span>
-              </button>
-            )}
-            <button
-              type="button"
-              lang={language === 'hi' ? 'en' : 'hi'}
-              className="rounded-lg px-2 py-1.5 font-medium text-accent hover:bg-paper"
-              onClick={() => setLanguage(language === 'hi' ? 'en' : 'hi')}
-            >
-              {language === 'hi' ? 'English' : 'हिन्दी'}
-            </button>
-          </div>
-        </div>
-      </header>
-      <div className="mx-auto w-full max-w-3xl px-4 pt-5">
+      <TopBar account={account} navItems={navItems} onHome={onHome} />
+      <div className={cx('mx-auto w-full px-4 pt-5 md:px-6 md:pt-8', wide ? 'max-w-5xl' : 'max-w-3xl')}>
         {onBack && (
-          <button type="button" className="-ml-2 mb-2 flex items-center gap-1 rounded-lg px-2 py-1 font-medium text-accent hover:bg-white" onClick={onBack}>
-            <span aria-hidden="true">←</span>
+          <button
+            type="button"
+            className="-ml-3 mb-1 inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-small font-semibold text-ink-700 transition-colors hover:bg-white hover:text-ink-900"
+            onClick={onBack}
+          >
+            <ArrowLeft aria-hidden="true" size={18} strokeWidth={2.25} />
             {t('Back')}
           </button>
         )}
-        <h1 className="font-display text-3xl leading-tight font-semibold sm:text-4xl">{t(title)}</h1>
-        <p className="mt-1 max-w-[60ch] text-muted">{t(intro)}</p>
+        <h1 className={cx('font-extrabold text-ink-900', isCompact ? 'text-title-1 md:text-[1.75rem] md:leading-9' : 'text-[1.75rem] leading-9 md:text-display')}>
+          {t(title)}
+        </h1>
+        <p className="mt-1.5 max-w-[60ch] text-ink-500">{t(intro)}</p>
       </div>
     </>
   )

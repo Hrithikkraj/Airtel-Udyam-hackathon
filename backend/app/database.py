@@ -29,7 +29,10 @@ def turn_on_foreign_keys(connection, _record):
 
 # Columns added after the first release. create_all makes new tables but never changes
 # existing ones, so these are added to an existing database without losing its data.
-LATER_COLUMNS = [("businesses", "user_id", "INTEGER REFERENCES users(user_id)")]
+LATER_COLUMNS = [
+    ("businesses", "user_id", "INTEGER REFERENCES users(user_id)"),
+    ("quotes", "accepted_with", "JSON"),
+]
 
 
 def add_later_columns():

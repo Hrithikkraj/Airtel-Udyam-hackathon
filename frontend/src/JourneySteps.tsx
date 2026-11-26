@@ -1,4 +1,5 @@
 import { useLanguage } from './i18n'
+import Stepper from './ui/Stepper'
 
 export type StepKey = 'choose' | 'quote' | 'verify' | 'order'
 
@@ -15,44 +16,20 @@ type Props = {
   onOpen: (step: StepKey) => void
 }
 
-// Where the owner is in the journey. Steps already reached can be opened again.
+// Where the owner is in the journey. The line fills as they move on, and steps already reached
+// can be opened again.
 export default function JourneySteps({ current, canOpen, onOpen }: Props) {
   const { t } = useLanguage()
-  const currentIndex = STEPS.findIndex((step) => step.key === current)
   return (
-    <nav aria-label={t('Your progress')} className="mx-auto w-full max-w-3xl px-4 pt-4">
-      <ol className="flex items-center gap-1 text-sm sm:gap-2">
-        {STEPS.map((step, index) => {
-          const isCurrent = step.key === current
-          const isPast = index < currentIndex
-          const isOpenable = !isCurrent && canOpen(step.key)
-          const number = (
-            <span
-              className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                isCurrent ? 'bg-accent text-white' : isOpenable || isPast ? 'bg-accent-soft text-accent' : 'border border-field text-muted'
-              }`}
-            >
-              {index + 1}
-            </span>
-          )
-          return (
-            <li key={step.key} className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
-              {isOpenable ? (
-                <button type="button" className="flex items-center gap-1.5 rounded-md py-1 font-medium text-accent hover:underline" onClick={() => onOpen(step.key)}>
-                  {number}
-                  {t(step.label)}
-                </button>
-              ) : (
-                <span aria-current={isCurrent ? 'step' : undefined} className={`flex items-center gap-1.5 py-1 ${isCurrent ? 'font-semibold' : 'text-muted'}`}>
-                  {number}
-                  {t(step.label)}
-                </span>
-              )}
-              {index < STEPS.length - 1 && <span aria-hidden="true" className="h-px min-w-2 flex-1 bg-rule" />}
-            </li>
-          )
-        })}
-      </ol>
-    </nav>
+    <div className="mx-auto w-full max-w-3xl px-4 pt-5 md:px-6">
+      <Stepper
+        label={t('Your progress')}
+        steps={STEPS.map((step) => ({ key: step.key, label: t(step.label) }))}
+        current={STEPS.findIndex((step) => step.key === current)}
+        canOpen={(index) => canOpen(STEPS[index].key)}
+        onOpen={(index) => onOpen(STEPS[index].key)}
+        className="rounded-card bg-white/70 px-1 pt-3 pb-1 shadow-e1"
+      />
+    </div>
   )
 }

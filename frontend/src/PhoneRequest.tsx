@@ -1,5 +1,8 @@
 import { useState, type FormEvent } from 'react'
+import { CircleCheck, PhoneCall } from 'lucide-react'
 import { useLanguage } from './i18n'
+import Button from './ui/Button'
+import { TextField } from './ui/Field'
 
 type Props = {
   buttonText: string
@@ -26,36 +29,42 @@ export default function PhoneRequest({ buttonText, doneText, onSend }: Props) {
     }
   }
 
-  if (isDone) return <p className="font-semibold">{t(doneText)}</p>
+  if (isDone) {
+    return (
+      <p role="status" className="notice-success flex items-center gap-2 font-semibold">
+        <CircleCheck aria-hidden="true" size={18} className="shrink-0" />
+        {t(doneText)}
+      </p>
+    )
+  }
 
   if (!isOpen) {
     return (
-      <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={() => setIsOpen(true)}>
+      <button type="button" className="link" onClick={() => setIsOpen(true)}>
+        <PhoneCall aria-hidden="true" size={16} />
         {t(buttonText)}
       </button>
     )
   }
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-sm">
-      <label className="block font-semibold">
-        {t('Your mobile number')}
-        <input
-          required
-          type="tel"
-          inputMode="numeric"
-          pattern="[6-9][0-9]{9}"
-          title={t('Enter a 10-digit mobile number')}
-          className="mt-1 w-full border bg-white px-3 py-2.5 text-base"
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-        />
-      </label>
-      <p className="mt-1 text-sm text-muted">
-        {t('We use this number only to call you about this request, and delete it when the request is closed.')}
-      </p>
-      {error && <p role="alert" className="mt-1 font-semibold">{error}</p>}
-      <button type="submit" className="mt-2 bg-accent px-5 py-2 font-semibold text-white">{t('Ask for a call')}</button>
+    <form onSubmit={handleSubmit} className="card-flat w-full max-w-sm">
+      <TextField
+        label={t('Your mobile number')}
+        required
+        type="tel"
+        inputMode="numeric"
+        autoComplete="tel-national"
+        pattern="[6-9][0-9]{9}"
+        title={t('Enter a 10-digit mobile number')}
+        value={phone}
+        hint={t('We use this number only to call you about this request, and delete it when the request is closed.')}
+        error={error || undefined}
+        onChange={(event) => setPhone(event.target.value)}
+      />
+      <Button type="submit" className="mt-3" icon={<PhoneCall aria-hidden="true" size={18} />}>
+        {t('Ask for a call')}
+      </Button>
     </form>
   )
 }

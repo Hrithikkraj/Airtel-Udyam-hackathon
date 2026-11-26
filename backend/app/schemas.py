@@ -182,6 +182,16 @@ class Recommendation(BaseModel):
 class SaveQuoteRequest(QuoteRequest):
     business_name: str | None = Field(default=None, max_length=120)
     city: str | None = Field(default=None, max_length=60)
+    # Who built the bundle, so a reopened quote explains it the same way.
+    chosen_by: Literal["advisor", "owner"] = "advisor"
+
+
+class AcceptedQuoteOut(BaseModel):
+    """An accepted quote, rebuilt so the owner can look at it again or change it."""
+    profile: BusinessProfile
+    recommendation: Recommendation
+    city: str | None = None
+    can_change: bool  # False once the order is placed or cancelled.
 
 
 class QuoteSaved(BaseModel):

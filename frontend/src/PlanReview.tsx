@@ -1,11 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { ArrowRight } from 'lucide-react'
 import { fetchCities, fetchOwnerPlan, type City, type Product, type Profile, type Recommendation } from './api'
 import { useLanguage } from './i18n'
+import Button from './ui/Button'
+import { SelectField, TextField } from './ui/Field'
 
 // Cities outside our list count as tier 2, the same rule the backend uses.
 const OTHER_CITY = 'other'
 const OTHER_CITY_TIER = 2
-const inputStyle = 'mt-1 w-full border bg-white px-3 py-2'
 
 type Props = {
   plan: Record<string, number>
@@ -67,36 +69,27 @@ export default function PlanReview({ plan, products, onCancel, onReviewed }: Pro
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="max-h-[70vh] overflow-y-auto">
-      <h2 className="font-display text-lg font-semibold">{t('A few details to check your plan')}</h2>
-      <p className="text-sm text-muted">{t('Some services depend on your city, size and GSTIN.')}</p>
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <label className="col-span-2 block font-semibold sm:col-span-1">
-          {t('City')}
-          <select className={inputStyle} value={city} onChange={(event) => setCity(event.target.value)}>
-            <option value="">{t('Choose a city')}</option>
-            {cities.map((known) => (
-              <option key={known.city} value={known.city}>
-                {known.city}
-              </option>
-            ))}
-            <option value={OTHER_CITY}>{t('Another city')}</option>
-          </select>
-        </label>
-        <label className="block font-semibold">
-          {t('People working')}
-          <input type="number" min="1" inputMode="numeric" className={inputStyle} value={employees} onChange={(event) => setEmployees(event.target.value)} />
-        </label>
-        <label className="block font-semibold">
-          {t('Sites or branches')}
-          <input type="number" min="1" inputMode="numeric" className={inputStyle} value={sites} onChange={(event) => setSites(event.target.value)} />
-        </label>
+    <form onSubmit={handleSubmit} noValidate className="max-h-[70dvh] overflow-y-auto py-1">
+      <h2 className="text-title-2 font-extrabold">{t('A few details to check your plan')}</h2>
+      <p className="text-small text-ink-500">{t('Some services depend on your city, size and GSTIN.')}</p>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <SelectField label={t('City')} wrapperClassName="col-span-2 sm:col-span-1" value={city} onChange={(event) => setCity(event.target.value)}>
+          <option value="">{t('Choose a city')}</option>
+          {cities.map((known) => (
+            <option key={known.city} value={known.city}>
+              {known.city}
+            </option>
+          ))}
+          <option value={OTHER_CITY}>{t('Another city')}</option>
+        </SelectField>
+        <TextField label={t('People working')} type="number" min="1" inputMode="numeric" value={employees} onChange={(event) => setEmployees(event.target.value)} />
+        <TextField label={t('Sites or branches')} type="number" min="1" inputMode="numeric" value={sites} onChange={(event) => setSites(event.target.value)} />
         <fieldset className="col-span-2">
-          <legend className="font-semibold">{t('Do you have a GSTIN?')}</legend>
-          <div className="mt-1 grid max-w-xs grid-cols-2 gap-2">
+          <legend className="field-label">{t('Do you have a GSTIN?')}</legend>
+          <div className="grid max-w-xs grid-cols-2 gap-2">
             {['yes', 'no'].map((answer) => (
               <label key={answer} className="choice items-center font-semibold">
-                <input type="radio" name="plan-gstin" className="size-5 accent-accent" checked={hasGstin === answer} onChange={() => setHasGstin(answer)} />
+                <input type="radio" name="plan-gstin" className="size-5" checked={hasGstin === answer} onChange={() => setHasGstin(answer)} />
                 {t(answer)}
               </label>
             ))}
@@ -105,20 +98,20 @@ export default function PlanReview({ plan, products, onCancel, onReviewed }: Pro
       </div>
 
       {problems.length > 0 && (
-        <ul role="alert" className="notice-error mt-3 space-y-1 font-medium">
+        <ul role="alert" className="notice-error mt-3 list-disc space-y-1 pl-8 font-medium">
           {problems.map((problem) => (
             <li key={problem}>{t(problem)}</li>
           ))}
         </ul>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-4">
-        <button type="submit" disabled={isBusy} className="bg-accent px-5 py-3 font-semibold text-white disabled:opacity-60">
-          {t(isBusy ? 'Checking your plan…' : 'See my quote')}
-        </button>
-        <button type="button" className="font-medium text-accent underline underline-offset-4" onClick={onCancel}>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button type="submit" isLoading={isBusy} loadingText={t('Checking your plan…')} iconAfter={<ArrowRight aria-hidden="true" size={18} />}>
+          {t('See my quote')}
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
           {t('Keep choosing')}
-        </button>
+        </Button>
       </div>
     </form>
   )

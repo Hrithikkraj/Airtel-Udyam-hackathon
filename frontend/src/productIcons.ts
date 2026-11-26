@@ -1,0 +1,56 @@
+import {
+  Cable,
+  Cctv,
+  Cloud,
+  CreditCard,
+  Gauge,
+  Globe,
+  Mail,
+  MessageCircle,
+  MessageSquareText,
+  Network,
+  Package,
+  Phone,
+  PhoneCall,
+  RotateCw,
+  Server,
+  Shield,
+  ShieldCheck,
+  Smartphone,
+  Truck,
+  Wifi,
+  type LucideIcon,
+} from 'lucide-react'
+
+// A picture for each product, so an owner can spot a service before reading its name.
+const ICONS: Record<string, LucideIcon> = {
+  P01: Wifi,
+  P02: Wifi,
+  P03: Wifi,
+  P04: Wifi,
+  P05: Cable,
+  P06: Cable,
+  P07: Smartphone,
+  P08: Smartphone,
+  P09: RotateCw,
+  P10: Network,
+  P11: Server,
+  P12: Phone,
+  P13: PhoneCall,
+  P14: MessageSquareText,
+  P15: MessageCircle,
+  P16: Mail,
+  P17: Cloud,
+  P18: Globe,
+  P19: CreditCard,
+  P20: Shield,
+  P21: ShieldCheck,
+  P22: Wifi,
+  P23: Cctv,
+  P24: Gauge,
+  P25: Truck,
+}
+
+export function productIcon(productId: string): LucideIcon {
+  return ICONS[productId] ?? Package
+}
