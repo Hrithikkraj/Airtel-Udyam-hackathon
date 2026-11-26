@@ -50,31 +50,33 @@ NUMBER_LIMITS = {
 }
 
 GREETING = re.compile(
-    r"^\s*(hi+|hello+|hey+|hii+|namaste|namaskar|नमस्ते|नमस्कार|good\s+(morning|afternoon|evening))[\s!.,]*$",
+    r"^\s*(hi+(?:\s+there)?|hello+(?:\s+there)?|hey(?:\s+there)?|namaste|namaskar|नमस्ते|नमस्कार|nice\s+to\s+meet\s+you(?:\s+too)?|good\s+(morning|afternoon|evening))[\s!.,]*$",
     re.IGNORECASE,
 )
 
 # What the owner is asked, by the step that is still missing. English and Hindi.
 QUESTIONS = {
     "kind": (
-        "What kind of business do you run? For example a shop, clinic, office or factory.",
-        "आप किस तरह का व्यवसाय चलाते हैं? जैसे दुकान, क्लिनिक, दफ़्तर या फ़ैक्ट्री।",
+        "Let's start with your business—what do you do? A shop, clinic, office or factory, for example.",
+        "पहले आपके व्यवसाय से शुरू करते हैं—आप क्या काम करते हैं? जैसे दुकान, क्लिनिक, दफ़्तर या फ़ैक्ट्री।",
     ),
-    "people": ("How many people work there?", "वहाँ कितने लोग काम करते हैं?"),
-    "branches": ("How many branches do you have?", "आपकी कितनी शाखाएँ हैं?"),
-    "city": ("Which city is your business in?", "आपका व्यवसाय किस शहर में है?"),
-    "gstin": ("Do you have a GSTIN? Please answer yes or no.", "क्या आपके पास GSTIN है? हाँ या नहीं में बताएँ।"),
+    "people": ("And roughly how many people work there?", "और वहाँ करीब कितने लोग काम करते हैं?"),
+    "branches": ("How many locations or branches do you have? An estimate is fine.", "आपकी कितनी जगहें या शाखाएँ हैं? अंदाज़ा भी चलेगा।"),
+    "city": ("Which city is the business based in?", "आपका व्यवसाय किस शहर में है?"),
+    "gstin": (
+        "One quick check: does the business have a GSTIN? Just yes or no is fine.",
+        "एक छोटी-सी ज़रूरी बात: क्या आपके व्यवसाय के पास GSTIN है? हाँ या नहीं काफ़ी है।",
+    ),
     "needs": (
-        "What does your business need? For example internet, business SIMs, WhatsApp, billing, email or CCTV.",
-        "आपके व्यवसाय को क्या चाहिए? जैसे इंटरनेट, बिज़नेस सिम, WhatsApp, बिलिंग, ईमेल या सीसीटीवी।",
+        "What would help most right now—reliable internet, business SIMs, billing, WhatsApp, email, CCTV or something else?",
+        "अभी आपके काम में सबसे ज़्यादा क्या मदद करेगा—अच्छा इंटरनेट, बिज़नेस सिम, बिलिंग, WhatsApp, ईमेल, CCTV या कुछ और?",
     ),
     "internet": (
-        "What internet do you use today? For example mobile hotspot, home broadband, or none.",
-        "अभी आप कौन सा इंटरनेट इस्तेमाल करते हैं? जैसे मोबाइल हॉटस्पॉट, होम ब्रॉडबैंड, या कोई नहीं।",
+        "And what do you use for internet at the moment—a mobile hotspot, home broadband, business broadband or none?",
+        "और अभी आप इंटरनेट के लिए क्या इस्तेमाल करते हैं—मोबाइल हॉटस्पॉट, होम ब्रॉडबैंड, बिज़नेस ब्रॉडबैंड या कुछ नहीं?",
     ),
 }
-NOT_UNDERSTOOD = ("Sorry, I didn't catch that.", "माफ़ कीजिए, मैं समझ नहीं पाया।")
-HELLO = ("Hello!", "नमस्ते!")
+HELLO = ("Hi! Nice to meet you too.", "नमस्ते! आपसे मिलकर अच्छा लगा।")
 
 
 def in_hindi(language: str) -> bool:
@@ -86,10 +88,10 @@ def ask(step: str, language: str) -> str:
     return hindi if in_hindi(language) else english
 
 
-def not_understood(latest_message: str, language: str) -> str:
-    """A greeting gets a greeting back. Anything else that gave no answer gets a short apology."""
-    pair = HELLO if GREETING.match(latest_message) else NOT_UNDERSTOOD
-    return pair[1] if in_hindi(language) else pair[0]
+def greeting_reply(latest_message: str, language: str) -> str | None:
+    if not GREETING.match(latest_message):
+        return None
+    return HELLO[1] if in_hindi(language) else HELLO[0]
 
 
 def simplify(text: str) -> str:
@@ -116,28 +118,27 @@ def owner_typed(value: str, owner_texts: list[str]) -> bool:
     return bool(wanted) and any(wanted in simplify(text) for text in owner_texts)
 
 
-def city_not_served(name: str, cities: list[CityOut], language: str) -> str:
-    served = ", ".join(city.city for city in cities)
+def city_not_served(name: str, language: str) -> str:
     if in_hindi(language):
         return (
-            f"हमें \"{name}\" उन शहरों में नहीं मिला जहाँ हम सेवा देते हैं: {served}। "
-            "अगर आपका व्यवसाय भारत के किसी और शहर में है, तो शहर के साथ राज्य भी लिखें, जैसे \"आगरा, उत्तर प्रदेश\"।"
+            f"मुझे \"{name}\" अभी हमारे सेवा वाले शहरों में नहीं मिला। "
+            "अगर आपका व्यवसाय भारत के किसी और शहर में है, तो राज्य का नाम भी बता देंगे? जैसे \"आगरा, उत्तर प्रदेश\"।"
         )
     return (
-        f"We could not find \"{name}\" among the cities we serve: {served}. "
-        "If your business is in another city in India, type the city with its state, for example \"Agra, Uttar Pradesh\"."
+        f"I couldn't match \"{name}\" to a location we currently serve. "
+        "If it's another city in India, could you share the state too? For example, \"Agra, Uttar Pradesh\"."
     )
 
 
 def number_problem(field: str, value: int, language: str) -> str:
     if in_hindi(language):
-        return f"\"{value}\" सही संख्या नहीं लगती।"
+        return f"\"{value}\" संख्या थोड़ी गलत लग रही है—क्या आप इसे जाँच सकते हैं?"
     names = {
         "employee_count": "the number of people working there",
         "num_sites": "the number of branches",
         "budget_monthly_inr": "a monthly budget in rupees",
     }
-    return f"\"{value}\" does not look like {names.get(field, 'a sensible number')}."
+    return f"\"{value}\" seems a little off for {names.get(field, 'that number')}. Could you check it?"
 
 
 def check_new_answers(
@@ -161,7 +162,7 @@ def check_new_answers(
             keep["city"] = turn.city.split(",")[0].strip().title()  # "Agra, Uttar Pradesh" is kept as "Agra"
         else:
             keep["city"] = None
-            problems.append(city_not_served(turn.city.strip(), cities, language))
+            problems.append(city_not_served(turn.city.strip(), language))
 
     for field, (smallest, largest) in NUMBER_LIMITS.items():
         value = getattr(turn, field)

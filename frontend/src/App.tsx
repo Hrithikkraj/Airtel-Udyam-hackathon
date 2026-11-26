@@ -314,26 +314,35 @@ export default function App() {
         <CataloguePage plan={plan} onPlanChange={setPlan} onReviewed={showQuote} />
       ) : (
         <main className="mx-auto w-full max-w-3xl flex-1 px-4">
-          {screen === 'advisor' && <AdvisorChat onDone={showQuote} onUseForm={openForm} />}
+          <div hidden={screen !== 'advisor'}>
+            <AdvisorChat onDone={showQuote} onUseForm={openForm} />
+          </div>
           {/* Kept on the page while hidden, so going back does not lose the answers. */}
           <div hidden={screen !== 'form'}>
             <GuidedForm notice={formNotice} onDone={showQuote} />
           </div>
           {screen === 'quote' && profile && recommendation && (
-            <QuotePage
-              profile={profile}
-              recommendation={recommendation}
-              city={city}
-              isAccepted={Boolean(session) && recommendation === acceptedRecommendation}
-              onBack={goBack}
-              onViewOrder={() => goTo('order')}
-              onSaved={(saved) => {
-                followOrder({ orderId: saved.order_id, businessId: saved.business_id, hasGstin: profile.has_gstin })
-                setAcceptedRecommendation(recommendation)
-                if (recommendation.chosen_by === 'owner') setPlan({}) // The plan is now an order.
-                goTo('order')
-              }}
-            />
+            <>
+              {homeScreen === 'advisor' && (
+                <button type="button" className="mb-4 font-medium text-accent underline underline-offset-4" onClick={() => goTo('advisor')}>
+                  {t('Correct my answers')}
+                </button>
+              )}
+              <QuotePage
+                profile={profile}
+                recommendation={recommendation}
+                city={city}
+                isAccepted={Boolean(session) && recommendation === acceptedRecommendation}
+                onBack={goBack}
+                onViewOrder={() => goTo('order')}
+                onSaved={(saved) => {
+                  followOrder({ orderId: saved.order_id, businessId: saved.business_id, hasGstin: profile.has_gstin })
+                  setAcceptedRecommendation(recommendation)
+                  if (recommendation.chosen_by === 'owner') setPlan({}) // The plan is now an order.
+                  goTo('order')
+                }}
+              />
+            </>
           )}
           {screen === 'order' && session && (
             <OrderPage orderId={session.orderId} onVerify={() => goTo('kyc')} onStartAgain={startAgain} />

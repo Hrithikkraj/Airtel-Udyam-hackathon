@@ -44,7 +44,10 @@ def fake_llm(monkeypatch):
             # An advisor answer cannot also be an explanation, so that step falls back.
             if shape is explain.ExplanationText and "explanation" not in answer:
                 raise llm.LLMUnavailable("not an explanation")
-            return shape(**answer)
+            payload = dict(answer)
+            if shape is AdvisorTurn:
+                payload.setdefault("reply_only", False)
+            return shape(**payload)
 
         monkeypatch.setattr(llm, "ask", fake_ask)
         monkeypatch.setattr(llm, "is_available", lambda: True)
@@ -99,6 +102,130 @@ def test_earlier_answers_are_kept_even_if_the_llm_forgets_them(client, fake_llm)
     assert second["city"] == "Patna"
     assert second["employee_count"] == 2
     assert second["needs"] == ["internet", "cctv"]
+
+
+def test_owner_can_correct_an_answer_after_a_recommendation(client, fake_llm):
+    fake_llm({"reply": "Thanks, here is your bundle.", "employee_count": 3})
+    answers = {
+        "employee_count": 2,
+        "segment": "micro",
+        "city": "Patna",
+        "has_gstin": False,
+        "needs": ["internet"],
+        "current_internet": "mobile_hotspot",
+    }
+
+    body = send(client, "Actually, I have 3 people instead of 2.", answers=answers)
+
+    assert body["answers"]["employee_count"] == 3
+    assert body["profile"]["employee_count"] == 3
+    assert body["reply"].startswith("Got it, I've updated your details.")
+
+
+def test_invalid_correction_does_not_return_a_recommendation_using_old_data(client, fake_llm):
+    fake_llm({"reply": "Thanks.", "employee_count": 0})
+    answers = {
+        "employee_count": 2,
+        "segment": "micro",
+        "city": "Patna",
+        "has_gstin": False,
+        "needs": ["internet"],
+        "current_internet": "none",
+    }
+
+    body = send(client, "Actually, we have 0 people.", answers=answers)
+
+    assert body["recommendation"] is None
+    assert body["answers"]["employee_count"] == 2
+    assert '"0" seems a little off for the number of people working there.' in body["reply"]
+
+
+def test_owner_can_replace_their_previous_needs(client, fake_llm):
+    fake_llm({"reply": "Got it.", "needs": ["mobile_lines"], "replace_needs": True})
+    answers = {
+        "employee_count": 2,
+        "segment": "micro",
+        "city": "Patna",
+        "has_gstin": False,
+        "needs": ["internet", "cctv"],
+        "current_internet": "none",
+    }
+
+    body = send(client, "Actually, no internet or cameras, just business SIMs.", answers=answers)
+
+    assert body["answers"]["needs"] == ["mobile_lines"]
+    assert body["profile"]["needs"] == ["mobile_lines"]
+    assert [line["product_id"] for line in body["recommendation"]["bundle"]["quote"]["lines"]] == ["P07"]
+
+
+def test_unrecognized_change_does_not_repeat_a_stale_recommendation(client, fake_llm):
+    reply = "Sure—what would you like to change about your business?"
+    fake_llm({"reply": reply, "reply_only": True})
+    answers = {
+        "employee_count": 2,
+        "segment": "micro",
+        "city": "Patna",
+        "has_gstin": False,
+        "needs": ["internet"],
+        "current_internet": "none",
+    }
+
+    body = send(client, "Can you change that?", answers=answers)
+
+    assert body["recommendation"] is None
+    assert body["reply"] == reply
+    assert body["answers"]["needs"] == answers["needs"]
+
+
+def test_owner_can_ask_for_help_without_being_pushed_to_the_pending_question(client, fake_llm):
+    reply = "Of course. I can help with internet, business SIMs, billing and other services. What are you trying to sort out?"
+    fake_llm({"reply": reply, "reply_only": True})
+
+    body = send(client, "I need help", answers={"segment": "micro", "employee_count": 2})
+
+    assert body["recommendation"] is None
+    assert body["reply"] == reply
+    assert "Which city" not in body["reply"]
+
+
+def test_owner_can_verify_known_details_without_restarting_the_question_flow(client, fake_llm):
+    reply = "I've got a small business in Patna with two people, and you're looking for internet. Did I get that right?"
+    answers = {
+        "employee_count": 2,
+        "segment": "micro",
+        "city": "Patna",
+        "has_gstin": False,
+        "needs": ["internet"],
+        "current_internet": "none",
+    }
+    calls = fake_llm({"reply": reply, "reply_only": True})
+
+    body = send(client, "What have I told you so far?", answers=answers)
+
+    assert body["recommendation"] is None
+    assert body["reply"] == reply
+    assert "summarize only the known details" in calls[0]["system"]
+
+
+def test_an_off_topic_message_is_redirected_without_asking_for_clarification(client, fake_llm):
+    reply = "I can't help with travel, but I can help you choose services for your business. What are you hoping to set up?"
+    fake_llm({"reply": reply, "reply_only": True})
+
+    body = send(client, "What is the capital of France?", answers={"segment": "micro", "employee_count": 2})
+
+    assert body["reply"] == reply
+    assert "What do you mean" not in body["reply"]
+
+
+def test_an_ambiguous_business_answer_can_get_a_specific_clarifying_question(client, fake_llm):
+    reply = "For the GSTIN question, did you mean yes or no?"
+    fake_llm({"reply": reply, "reply_only": True})
+    answers = {"segment": "micro", "employee_count": 2, "city": "Patna"}
+
+    body = send(client, "maybe", answers=answers)
+
+    assert body["reply"] == reply
+    assert body["recommendation"] is None
 
 
 def test_the_llm_is_told_what_is_known_and_what_is_missing(client, fake_llm):
@@ -173,6 +300,12 @@ def test_the_prompt_never_invites_the_llm_to_ask_about_segments():
     assert "Never ask about segments" in advisor.SYSTEM_PROMPT
 
 
+def test_the_prompt_steers_the_advisor_away_from_a_questionnaire_tone():
+    assert "not a form reading questions" in advisor.SYSTEM_PROMPT
+    assert "reflect one specific detail" in advisor.SYSTEM_PROMPT
+    assert "Set reply_only to true" in advisor.SYSTEM_PROMPT
+
+
 def test_a_chain_is_asked_how_many_branches_but_a_shop_is_not():
     chain = advisor.AdvisorAnswers(segment="multi", employee_count=60)
     shop = advisor.AdvisorAnswers(segment="micro", employee_count=2)
@@ -214,7 +347,8 @@ def test_reply_that_mentions_a_price_is_replaced(client, fake_llm):
     fake_llm({"reply": "Our fibre is only ₹1 a month! How many staff?", "city": "Patna"})
     reply = chat(client).json()["reply"]
     assert "₹" not in reply
-    assert reply == "What kind of business do you run? For example a shop, clinic, office or factory."
+    assert reply.startswith("I'll work out the exact price once I know what fits your business.")
+    assert reply.endswith("Let's start with your business—what do you do? A shop, clinic, office or factory, for example.")
 
 
 # ---------- Answers that make no sense are not kept ----------
@@ -229,8 +363,25 @@ def test_a_place_we_do_not_serve_is_refused_with_the_reason(client, fake_llm, pl
     fake_llm({"reply": "Do you have a GSTIN?", "city": place})
     body = send(client, place, answers={"segment": "micro", "employee_count": 2})
     assert body["answers"]["city"] is None
-    assert f'We could not find "{place}"' in body["reply"]
-    assert body["reply"].endswith("Which city is your business in?")
+    assert f'I couldn\'t match "{place}" to a location we currently serve.' in body["reply"]
+    assert body["reply"].endswith("Which city is the business based in?")
+
+
+def test_an_unlisted_city_keeps_the_owner_in_the_chat_and_asks_for_its_state(client, fake_llm):
+    fake_llm({"reply": "Could you share its state too?", "city": "Port Blair"})
+
+    response = client.post(
+        "/api/advisor/message",
+        json={
+            "messages": [{"role": "user", "content": "Port Blair"}],
+            "answers": {"segment": "micro", "employee_count": 2},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answers"]["city"] is None
+    assert "share the state too" in body["reply"]
 
 
 @pytest.mark.parametrize("typed, kept", [("Bangalore", "Bengaluru"), ("bombay", "Mumbai"), ("PUNE", "Pune"), ("Patna", "Patna")])
@@ -254,20 +405,22 @@ def test_a_city_the_owner_never_typed_is_ignored(client, fake_llm):
 def test_a_greeting_gets_a_greeting_and_the_question_again(client, fake_llm, text):
     fake_llm({"reply": "Lovely weather!"})
     reply = send(client, text)["reply"]
-    assert reply == "Hello! What kind of business do you run? For example a shop, clinic, office or factory."
+    assert reply == "Hi! Nice to meet you too. Let's start with your business—what do you do? A shop, clinic, office or factory, for example."
 
 
-@pytest.mark.parametrize("text", ["asdf", "what is the capital of France?", "ok", "maybe"])
-def test_a_reply_with_no_answer_is_asked_again(client, fake_llm, text):
-    fake_llm({"reply": "Paris is lovely."})
-    body = send(client, text, answers={"segment": "micro", "employee_count": 2})
-    assert body["reply"] == "Sorry, I didn't catch that. Which city is your business in?"
+def test_a_greeting_to_the_advisor_is_recognized_as_a_greeting():
+    from app.answer_checks import greeting_reply
+
+    assert greeting_reply("Nice to meet you too!", "English") == "Hi! Nice to meet you too."
 
 
-def test_the_same_question_is_asked_again_in_hindi(client, fake_llm):
-    fake_llm({"reply": "x"})
-    reply = send(client, "asdf", answers={"segment": "micro"}, language="Hindi")["reply"]
-    assert reply == "माफ़ कीजिए, मैं समझ नहीं पाया। वहाँ कितने लोग काम करते हैं?"
+def test_a_query_in_hindi_is_answered_without_a_fixed_fallback(client, fake_llm):
+    reply = "ज़रूर, मैं इंटरनेट, बिज़नेस सिम और बिलिंग चुनने में मदद कर सकता हूँ। आपको किस चीज़ में मदद चाहिए?"
+    fake_llm({"reply": reply, "reply_only": True})
+
+    body = send(client, "मुझे मदद चाहिए", answers={"segment": "micro", "employee_count": 2}, language="Hindi")
+
+    assert body["reply"] == reply
 
 
 @pytest.mark.parametrize("field, value", [("employee_count", 0), ("employee_count", 50_000_000), ("budget_monthly_inr", 5), ("num_sites", 0)])
@@ -275,7 +428,7 @@ def test_numbers_no_business_could_have_are_refused(client, fake_llm, field, val
     fake_llm({"reply": "Next?", field: value})
     body = send(client, str(value), answers={"segment": "micro"})
     assert body["answers"][field] is None
-    assert f'"{value}" does not look like' in body["reply"]
+    assert f'"{value}" seems a little off' in body["reply"]
 
 
 def test_a_real_answer_still_moves_the_chat_on(client, fake_llm):

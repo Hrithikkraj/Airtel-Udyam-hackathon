@@ -43,6 +43,7 @@ def test_a_valid_answer_is_returned_as_a_checked_object(fake_server):
 
     assert isinstance(turn, AdvisorTurn)
     assert turn.needs == ["internet"]
+    assert turn.reply_only is False
     assert requests[0]["auth"] == "Bearer test-key"
     assert requests[0]["body"]["model"] == llm.MODEL
     assert requests[0]["body"]["temperature"] == 0

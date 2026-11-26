@@ -140,8 +140,16 @@ export const fetchProducts = () => request<Product[]>('/api/catalogue/products')
 export const fetchCities = () => request<City[]>('/api/advisor/cities')
 export const fetchAdvisorStatus = () => request<{ available: boolean }>('/api/advisor/status')
 
+export function trimAdvisorMessages(messages: ChatMessage[]): ChatMessage[] {
+  return messages.slice(-20).map(({ role, content }) => ({ role, content: content.slice(0, 1000) }))
+}
+
 export const sendAdvisorMessage = (messages: ChatMessage[], language: string, answers: AdvisorAnswers) =>
-  request<AdvisorReply>('/api/advisor/message', { messages, preferred_language: language, answers })
+  request<AdvisorReply>('/api/advisor/message', {
+    messages: trimAdvisorMessages(messages),
+    preferred_language: language,
+    answers,
+  })
 
 export const fetchRecommendation = (profile: Profile) =>
   request<Recommendation>('/api/bundles/recommend', profile)

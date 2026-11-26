@@ -193,8 +193,10 @@ class AdvisorRequest(BaseModel):
 
 
 class AdvisorTurn(AdvisorAnswers):
-    """What the LLM must return each turn: the next message, plus any new answers."""
+    """What the LLM extracts from a turn and how it should respond."""
     reply: str
+    replace_needs: bool = False
+    reply_only: bool = False
 
 
 class AdvisorResponse(BaseModel):
