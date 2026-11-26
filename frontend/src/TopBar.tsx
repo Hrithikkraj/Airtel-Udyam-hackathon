@@ -2,7 +2,7 @@ import { useLanguage } from './i18n'
 import type { NavItem } from './navigation'
 import Avatar from './ui/Avatar'
 import { cx } from './ui/cx'
-import Logo, { LogoMark } from './ui/Logo'
+import Logo from './ui/Logo'
 import SegmentedControl from './ui/SegmentedControl'
 import { useToast } from './ui/useToast'
 
@@ -28,13 +28,13 @@ export default function TopBar({ account, navItems, onHome }: Props) {
   return (
     <header className="glass sticky top-0 z-40 border-b border-ink-200/70 pt-safe">
       <div className="mx-auto flex h-16 max-w-5xl items-center gap-3 px-4 md:px-6">
+        {/* One logo at every width. It fits beside the language switch even on a 320px phone. */}
         {onHome ? (
-          <button type="button" aria-label={t('Accel Business home')} className="-ml-1 flex min-h-11 items-center rounded-control px-1" onClick={onHome}>
-            <Logo className="hidden sm:inline-flex" />
-            <LogoMark className="sm:hidden" />
+          <button type="button" aria-label={t('Accel Business home')} className="-ml-1 flex min-h-11 shrink-0 items-center rounded-control px-1" onClick={onHome}>
+            <Logo size={28} />
           </button>
         ) : (
-          <Logo />
+          <Logo size={28} />
         )}
 
         {navItems && (
