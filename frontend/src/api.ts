@@ -165,6 +165,21 @@ export const fetchProducts = () => request<Product[]>('/api/catalogue/products')
 export const fetchCities = () => request<City[]>('/api/advisor/cities')
 export const fetchAdvisorStatus = () => request<{ available: boolean }>('/api/advisor/status')
 
+// The file ending only helps the server read the format; the server checks the recording's type itself.
+const VOICE_FILE_ENDINGS: Record<string, string> = { 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg' }
+
+/**
+ * Sends a short voice recording and returns what the owner said, for the chat box. Nothing is stored.
+ * `language` is only a hint, the chat's language so far: it keeps spoken Hindi out of Urdu script.
+ */
+export function transcribeAudio(audio: Blob, language: string) {
+  const kind = audio.type.split(';')[0]
+  const form = new FormData()
+  form.append('audio', audio, `voice.${VOICE_FILE_ENDINGS[kind] ?? 'webm'}`)
+  form.append('language', language)
+  return send<{ text: string }>('/api/advisor/transcribe', { form })
+}
+
 export function trimAdvisorMessages(messages: ChatMessage[]): ChatMessage[] {
   return messages.slice(-20).map(({ role, content }) => ({ role, content: content.slice(0, 1000) }))
 }

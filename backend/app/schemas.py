@@ -212,6 +212,11 @@ class AdvisorStatus(BaseModel):
     available: bool
 
 
+class VoiceTranscript(BaseModel):
+    """What the owner said into the microphone, as text they can check before sending."""
+    text: str
+
+
 class AdvisorMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field(min_length=1, max_length=1000)

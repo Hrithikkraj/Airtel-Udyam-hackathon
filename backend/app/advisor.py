@@ -6,7 +6,7 @@ The browser keeps the conversation, so the server stores no chat text.
 import logging
 import re
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -37,6 +37,7 @@ from .schemas import (
     AdvisorTurn,
     BusinessProfile,
     CityOut,
+    VoiceTranscript,
 )
 from .translate import say
 
@@ -278,6 +279,64 @@ def advisor_status():
 @router.get("/cities", response_model=list[CityOut])
 def get_cities(db: Session = Depends(get_db)):
     return list_cities(db)
+
+
+# Recording formats phones and browsers make, and the file ending the speech service expects.
+# Chrome and Android make webm, Safari and iPhone make mp4. Anything after ";" (the codec) is ignored.
+VOICE_FORMATS = {
+    "audio/webm": "webm",
+    "video/webm": "webm",
+    "audio/ogg": "ogg",
+    "audio/mp4": "m4a",
+    "video/mp4": "mp4",
+    "audio/x-m4a": "m4a",
+    "audio/m4a": "m4a",
+    "audio/mpeg": "mp3",
+    "audio/wav": "wav",
+    "audio/x-wav": "wav",
+    "audio/wave": "wav",
+    "audio/flac": "flac",
+}
+# A minute of speech is well under 2 MB in any of these formats. The browser stops at one minute.
+MAX_VOICE_BYTES = 4 * 1024 * 1024
+# The same limit as a typed chat message.
+MAX_TRANSCRIPT_CHARS = 1000
+# Spoken Hindi and Urdu sound almost the same, so speech recognition sometimes writes Hindi speech
+# in Urdu script. Text in that script, from an owner who is not chatting in Urdu, is asked for again
+# as Hindi, which gives Devanagari.
+URDU_SCRIPT = re.compile(r"[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]")
+
+
+@router.post("/transcribe", response_model=VoiceTranscript, dependencies=[Depends(require_signed_in_owner)])
+def transcribe_voice(audio: UploadFile = File(), language: str = Form(default="", max_length=60)):
+    """Turns the owner's voice into text. The text goes back into the chat box, where the owner can
+    check it and send it like a typed message, so every check on typed text still applies.
+    The recording is read in memory, passed on and never stored or logged.
+    language is only a hint: the chat's language so far. The speech service finds the language itself."""
+    if not llm.is_available():
+        raise HTTPException(status_code=503, detail="Voice input is not available")
+    kind = (audio.content_type or "").split(";")[0].strip().lower()
+    extension = VOICE_FORMATS.get(kind)
+    if extension is None:
+        raise HTTPException(status_code=415, detail="This kind of recording is not supported. Please type your message.")
+    # Read one byte over the limit, so an oversized recording is caught without reading all of it.
+    recording = audio.file.read(MAX_VOICE_BYTES + 1)
+    if len(recording) > MAX_VOICE_BYTES:
+        raise HTTPException(status_code=413, detail="This recording is too long. Please keep it under a minute.")
+    if not recording:
+        raise HTTPException(status_code=422, detail="The recording is empty. Please try again.")
+    try:
+        text = llm.transcribe(recording, f"voice.{extension}")
+    except llm.LLMUnavailable as error:
+        logger.warning("Voice transcription unavailable: %s", error)
+        raise HTTPException(status_code=503, detail="Voice input is not available") from error
+    if URDU_SCRIPT.search(text) and normalize_language(language, "English") != "Urdu":
+        try:
+            text = llm.transcribe(recording, f"voice.{extension}", language="hi")
+        except llm.LLMUnavailable as error:
+            # The first text is still what the owner said, so it is kept rather than lost.
+            logger.warning("Voice transcription in Hindi unavailable: %s", error)
+    return VoiceTranscript(text=text[:MAX_TRANSCRIPT_CHARS])
 
 
 @router.post("/message", response_model=AdvisorResponse, dependencies=[Depends(require_signed_in_owner)])

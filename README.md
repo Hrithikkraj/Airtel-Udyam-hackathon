@@ -32,6 +32,12 @@ Open http://localhost:5173. Skip `npm install` after the first run.
 
 Copy `backend/.env.example` to `backend/.env`, add your Groq API key to the copy, and restart the backend. Git ignores `.env`, so keep keys there and never in `.env.example`, which is public. Without a key, the app opens a guided form that gives the same bundle and prices. If the LLM fails during a chat, the error is shown and the owner can retry or switch to the guided form.
 
+The same key turns on voice in the advisor:
+- **Speak:** the microphone button records up to one minute. The backend sends the recording once to Whisper on Groq, which works out the language by itself. The text goes into the chat box, so the owner can check it before sending, and every check on typed messages still applies. Recordings are read in memory, never stored or logged.
+- **Listen:** "Read replies aloud" reads the advisor's replies with the phone's own voices, so nothing leaves the phone. It turns on by itself the first time the owner uses the microphone. If the phone has no voice for the chat's language, replies stay text only and the owner is told.
+
+The microphone needs `localhost` or HTTPS, and the browser asks the owner for permission first.
+
 If the chat opens but cannot reply, check the backend terminal for the provider's HTTP status (for example, 401 for a rejected key or 429 for a rate limit). The log does not include your API key or chat text. Use the `GROQ_API_KEY` variable shown in `backend/.env.example`.
 
 ## Accounts
@@ -115,6 +121,7 @@ The normal backend run skips real OCR. To run it on all 47 sample documents, whi
 | `frontend/src/api.ts` | All calls from the frontend to the backend |
 | `frontend/src/App.tsx` | Moves the owner between screens |
 | `frontend/src/AdvisorChat.tsx` | Advisor chat |
+| `frontend/src/voice.ts` | Microphone recording and reading replies aloud |
 | `frontend/src/GuidedForm.tsx` | Form used when the chat is off or fails |
 | `frontend/src/QuotePage.tsx` | Quote with add-ons the owner can toggle |
 | `frontend/src/KycPage.tsx` | Consent screen and document upload |

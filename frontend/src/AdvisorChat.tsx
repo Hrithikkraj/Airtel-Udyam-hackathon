@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowDown, ArrowRight, Bot, Clock, Link2, ListChecks, Lock, MessageSquarePlus, SendHorizontal, Sparkles, Unlink } from 'lucide-react'
+import { ArrowDown, ArrowRight, Bot, Clock, Link2, ListChecks, Lock, MessageSquarePlus, Mic, SendHorizontal, Sparkles, Square, Unlink, Volume2, VolumeX } from 'lucide-react'
 import { m, useInView, useReducedMotion } from 'motion/react'
 import { useLanguage } from './i18n'
-import { ApiError, sendAdvisorMessage, type AdvisorAnswers, type ChatMessage, type Profile, type Recommendation } from './api'
+import { ApiError, sendAdvisorMessage, transcribeAudio, type AdvisorAnswers, type ChatMessage, type Profile, type Recommendation } from './api'
 import { rupees } from './format'
+import { canRecord, canSpeak, useSpeech, useVoiceRecorder, type VoiceProblem } from './voice'
 import AnimatedNumber from './ui/AnimatedNumber'
 import Button from './ui/Button'
 import Chip from './ui/Chip'
+import Spinner from './ui/Spinner'
 import { cx } from './ui/cx'
 import { DURATION, EASE_OUT } from './ui/motionTokens'
 
@@ -149,6 +151,89 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
   const inputRef = useRef<HTMLInputElement>(null)
   const isLatestVisible = useInView(endRef)
 
+  // Voice: the microphone fills the chat box, and replies can be read aloud.
+  const [voiceInput] = useState(canRecord)
+  const [voiceOutput] = useState(canSpeak)
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const [readAloud, setReadAloud] = useState(false)
+  // Once the owner turns reading aloud on or off, the microphone no longer turns it on for them.
+  const readAloudChosenRef = useRef(false)
+  const [voiceNotice, setVoiceNotice] = useState('')
+  const speech = useSpeech()
+  const recorder = useVoiceRecorder({ onRecorded: handleRecorded, onProblem: handleVoiceProblem })
+
+  // Reads an advisor reply aloud when the owner asked for that. The phone may have no voice for the
+  // chat's language; the reply is still on screen, and the owner is told once.
+  function speakReply(content: string, language: string) {
+    if (!readAloud) return
+    if (!speech.speak(content, language)) {
+      setVoiceNotice(t('This phone has no voice for this language, so replies are shown as text only.'))
+    }
+  }
+
+  function toggleReadAloud() {
+    readAloudChosenRef.current = true
+    const next = !readAloud
+    setReadAloud(next)
+    setVoiceNotice('')
+    if (!next) {
+      speech.stop()
+      return
+    }
+    // Turning it on reads the latest advisor message, so the owner hears that it works.
+    const latest = [...messages].reverse().find((message) => message.role === 'assistant')
+    const content = latest?.content ?? t(GREETING)
+    if (!speech.speak(content, latest ? chatLanguage : languageName)) {
+      setVoiceNotice(t('This phone has no voice for this language, so replies are shown as text only.'))
+    }
+  }
+
+  function toggleRecording() {
+    if (recorder.isRecording) {
+      recorder.stop()
+      return
+    }
+    // The advisor stops talking, so the microphone does not hear it.
+    speech.stop()
+    setChatError('')
+    setVoiceNotice('')
+    void recorder.start()
+  }
+
+  async function handleRecorded(audio: Blob) {
+    // Someone who talks to the advisor most likely wants to hear it too, until they say otherwise.
+    if (voiceOutput && !readAloudChosenRef.current) setReadAloud(true)
+    setIsTranscribing(true)
+    try {
+      const heard = (await transcribeAudio(audio, chatLanguage)).text.trim()
+      if (!heard) {
+        setChatError(t("I didn't catch that. Please try again, or type your message."))
+        return
+      }
+      // The words go into the chat box, so the owner can check them before sending.
+      setText((current) => (current.trim() ? `${current.trim()} ${heard}` : heard).slice(0, 1000))
+      inputRef.current?.focus()
+    } catch (error) {
+      setChatError(
+        error instanceof ApiError && error.status === 503
+          ? t('Voice is not available right now. Please type your message.')
+          : t('That recording did not go through. Please try again, or type your message.'),
+      )
+    } finally {
+      setIsTranscribing(false)
+    }
+  }
+
+  function handleVoiceProblem(problem: VoiceProblem) {
+    const messagesFor: Record<VoiceProblem, string> = {
+      denied: 'Allow the microphone for this site to speak your message. You can always type instead.',
+      noMicrophone: 'No microphone was found. Please type your message.',
+      tooShort: 'That was too short. Tap the microphone, speak, then tap again to finish.',
+      failed: 'The microphone did not start. Please try again, or type your message.',
+    }
+    setChatError(t(messagesFor[problem]))
+  }
+
   // Keep the newest message in view as the conversation grows. Not before the first message, so
   // opening the page does not jump.
   useEffect(() => {
@@ -174,6 +259,7 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
       const replyLanguage = shortReplyLanguage(typed, chatLanguage)
       setDetectedLanguage(replyLanguage)
       setMessages([...updated, { role: 'assistant', content: chatLine('whatToChange', replyLanguage) }])
+      speakReply(chatLine('whatToChange', replyLanguage), replyLanguage)
       return
     }
 
@@ -192,17 +278,14 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
           city: answer.answers.city ?? null,
         }
         setProposal(nextProposal)
-        setMessages([
-          ...updated,
-          {
-            role: 'assistant',
-            content: chatLine(revisingProposal ? 'revisedProposal' : 'firstProposal', replyLanguage),
-          },
-        ])
+        const proposalLine = chatLine(revisingProposal ? 'revisedProposal' : 'firstProposal', replyLanguage)
+        setMessages([...updated, { role: 'assistant', content: proposalLine }])
+        speakReply(proposalLine, replyLanguage)
         return
       }
       if (revisingProposal && answersChanged(answers, answer.answers)) setProposal(null)
       setMessages([...updated, { role: 'assistant', content: answer.reply }])
+      speakReply(answer.reply, replyLanguage)
     } catch (error) {
       setMessages(messages)
       setText(typed)
@@ -217,6 +300,8 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
   }
 
   function showQuote(nextProposal: ProposedQuote, confirmation: string, replyLanguage: string) {
+    // The quote page is read on screen, so the advisor stops talking.
+    speech.stop()
     setDetectedLanguage(replyLanguage)
     setMessages((current) => [
       ...current,
@@ -238,6 +323,7 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
   // Starting over asks first only when there is something to lose.
   function startNewChat(separate: boolean) {
     if (messages.length > 0 && !window.confirm(t('Start a new chat? This conversation will be cleared.'))) return
+    speech.stop()
     onNewChat(separate)
   }
 
@@ -248,20 +334,39 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
   return (
     <div className="card my-6 p-0!">
       {/* The advisor's name card. No language picker: it replies in the language the owner writes in. */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-ink-100 px-4 py-3 sm:px-5">
-        <AdvisorAvatar size="md" />
-        <div className="min-w-0 flex-1">
-          <p className="font-bold leading-tight">{t('Advisor')}</p>
-          <p className="flex items-center gap-1.5 text-caption text-ink-500">
-            <span aria-hidden="true" className="size-2 rounded-full bg-success-500" />
-            {t('Replies in your language')}
-          </p>
+      {/* Two calm rows: who you are talking to (with the voice switch), then the chat's own actions. */}
+      <div className="border-b border-ink-100 px-4 py-4 sm:px-5">
+        <div className="flex items-center gap-3">
+          <AdvisorAvatar size="md" />
+          <div className="min-w-0 flex-1">
+            <p className="font-bold leading-tight">{t('Advisor')}</p>
+            <p className="mt-1 flex items-center gap-1.5 text-caption text-ink-500">
+              <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-success-500" />
+              <span className="truncate">{t('Replies in your language')}</span>
+            </p>
+          </div>
+          {voiceOutput && (
+            // Grey when off, filled red when on, so its state is clear at a glance.
+            <button
+              type="button"
+              onClick={toggleReadAloud}
+              aria-pressed={readAloud}
+              aria-label={t('Read replies aloud')}
+              title={t('Read replies aloud')}
+              className={cx(
+                'flex size-11 shrink-0 items-center justify-center rounded-full transition-[transform,background-color,box-shadow] duration-200 ease-spring active:scale-90',
+                readAloud ? 'bg-brand-600 text-white shadow-brand hover:bg-brand-700' : 'bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50',
+              )}
+            >
+              {readAloud ? <Volume2 aria-hidden="true" size={20} /> : <VolumeX aria-hidden="true" size={20} />}
+            </button>
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-1">
-          <Button variant="ghost" size="sm" icon={<MessageSquarePlus aria-hidden="true" size={18} />} onClick={() => startNewChat(false)}>
+        <div className="mt-4 flex flex-wrap gap-2 sm:pl-14">
+          <Button variant="secondary" size="sm" icon={<MessageSquarePlus aria-hidden="true" size={18} />} onClick={() => startNewChat(false)}>
             {t('New chat')}
           </Button>
-          <Button variant="ghost" size="sm" icon={<ListChecks aria-hidden="true" size={18} />} onClick={() => onUseForm()}>
+          <Button variant="secondary" size="sm" icon={<ListChecks aria-hidden="true" size={18} />} onClick={() => onUseForm()}>
             {t('Use a short form instead')}
           </Button>
         </div>
@@ -427,9 +532,44 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
               maxLength={1000}
               disabled={isBusy}
               onChange={(e) => setText(e.target.value)}
-              placeholder={t(proposal ? 'Tell me what to change, or say “looks good”' : 'Write a message')}
+              placeholder={t(
+                recorder.isRecording
+                  ? 'Listening… tap the red button when you finish'
+                  : isTranscribing
+                    ? 'Writing down what you said…'
+                    : proposal
+                      ? 'Tell me what to change, or say “looks good”'
+                      : voiceInput
+                        ? 'Write or speak a message'
+                        : 'Write a message',
+              )}
             />
           </label>
+          {voiceInput && (
+            <button
+              type="button"
+              onClick={toggleRecording}
+              disabled={isBusy || isTranscribing}
+              aria-pressed={recorder.isRecording}
+              aria-label={t(recorder.isRecording ? 'Stop recording' : 'Speak your message')}
+              className={cx(
+                'flex size-12 shrink-0 items-center justify-center rounded-full transition-[transform,background-color] duration-200 ease-spring active:scale-90',
+                recorder.isRecording ? 'animate-pulse bg-brand-600 text-white shadow-brand' : 'bg-ink-100 text-ink-700 hover:bg-ink-200',
+              )}
+            >
+              {isTranscribing ? (
+                <Spinner size={20} />
+              ) : recorder.isRecording ? (
+                <Square aria-hidden="true" size={18} fill="currentColor" />
+              ) : (
+                <Mic aria-hidden="true" size={20} />
+              )}
+            </button>
+          )}
+          {/* Screen readers hear when listening starts and stops. */}
+          <span className="sr-only" aria-live="polite">
+            {recorder.isRecording ? t('Listening') : isTranscribing ? t('Writing down what you said…') : ''}
+          </span>
           <button
             type="submit"
             disabled={isBusy || !text.trim()}
@@ -445,8 +585,16 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
       </div>
       <p className="flex items-start gap-1.5 px-4 pt-1 pb-4 text-caption text-ink-500 sm:px-5">
         <Lock aria-hidden="true" size={14} className="mt-0.5 shrink-0" />
-        {t('Quick privacy note: please do not share ID numbers. For GSTIN, yes or no is all I need.')}
+        <span>
+          {t('Quick privacy note: please do not share ID numbers. For GSTIN, yes or no is all I need.')}
+          {voiceInput && ` ${t('Voice messages are turned into text and never stored.')}`}
+        </span>
       </p>
+      {voiceNotice && (
+        <p role="status" className="px-4 pb-4 text-caption text-ink-500 sm:px-5">
+          {voiceNotice}
+        </p>
+      )}
     </div>
   )
 }

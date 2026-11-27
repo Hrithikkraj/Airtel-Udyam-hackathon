@@ -21,6 +21,12 @@ MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
 BACKUP_MODEL = os.getenv("LLM_BACKUP_MODEL", "openai/gpt-oss-20b")
 TIMEOUT_SECONDS = 20
 
+# Speech to text for the advisor's microphone button. It uses the same API key.
+# Whisper finds the language by itself, so an owner can speak Hindi, Tamil or Hinglish.
+TRANSCRIBE_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+VOICE_MODEL = os.getenv("VOICE_MODEL", "whisper-large-v3")
+BACKUP_VOICE_MODEL = os.getenv("VOICE_BACKUP_MODEL", "whisper-large-v3-turbo")
+
 ResponseShape = TypeVar("ResponseShape", bound=BaseModel)
 
 
@@ -67,6 +73,43 @@ def ask(system: str, messages: list[dict], response_shape: type[ResponseShape]) 
                 return response_shape.model_validate(json.loads(content))
             # Only the error type is kept, so customer text can never reach the logs.
             except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError, ValidationError) as error:
+                if isinstance(error, httpx.HTTPStatusError):
+                    last_problem = f"{type(error).__name__} (status {error.response.status_code})"
+                else:
+                    last_problem = type(error).__name__
+    raise LLMUnavailable(last_problem)
+
+
+def transcribe(audio: bytes, filename: str, language: str | None = None) -> str:
+    """Turn a short voice recording into text. The audio is never kept.
+
+    filename only tells the service the format, for example "voice.webm".
+    language is an ISO code such as "hi". Without it, the service finds the language itself.
+    """
+    if not is_available():
+        raise LLMUnavailable("No API key is set")
+
+    headers = {"Authorization": f"Bearer {api_key()}"}
+    form = {"response_format": "json", "temperature": "0"}
+    if language:
+        form["language"] = language
+    last_problem = "No answer"
+    with make_client() as client:
+        for model in [VOICE_MODEL, BACKUP_VOICE_MODEL]:
+            try:
+                response = client.post(
+                    TRANSCRIBE_URL,
+                    headers=headers,
+                    data={**form, "model": model},
+                    files={"file": (filename, audio)},
+                )
+                response.raise_for_status()
+                text = response.json()["text"]
+                if not isinstance(text, str):
+                    raise TypeError("The transcript is not text")
+                return text.strip()
+            # Only the error type is kept, so what the owner said can never reach the logs.
+            except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
                 if isinstance(error, httpx.HTTPStatusError):
                     last_problem = f"{type(error).__name__} (status {error.response.status_code})"
                 else:
