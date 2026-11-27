@@ -22,7 +22,7 @@ export default function BottomNav({ items }: { items: NavItem[] }) {
   return (
     <nav
       aria-label={t('Main navigation')}
-      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 md:hidden"
+      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 lg:hidden"
     >
       <ul
         className="glass relative grid rounded-[1.75rem] p-1.5 shadow-e3 ring-1 ring-ink-200/70"

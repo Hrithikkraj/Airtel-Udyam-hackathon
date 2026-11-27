@@ -7,6 +7,21 @@ export const HINDI: Record<string, string> = {
   Close: 'बंद करें',
   Dismiss: 'हटाएँ',
 
+  // Chats and orders
+  'New business': 'नया व्यवसाय',
+  'New business: start fresh': 'नया व्यवसाय: नई शुरुआत करें',
+  'Start fresh for a new business': 'नए व्यवसाय के लिए नई शुरुआत करें',
+  'Start fresh for a new business? Your earlier orders stay safe in your profile.': 'नए व्यवसाय के लिए नई शुरुआत करें? आपके पिछले ऑर्डर आपकी प्रोफ़ाइल में सुरक्षित रहेंगे।',
+  'Fresh start. Tell the advisor about your new business.': 'नई शुरुआत। सलाहकार को अपने नए व्यवसाय के बारे में बताइए।',
+  'Have another business? Start fresh with a new chat and a new quote.': 'कोई और व्यवसाय है? नई चैट और नए कोटेशन से शुरुआत करें।',
+  'New chat': 'नई चैट',
+  'Linked to': 'जुड़ी है:',
+  'A quote you accept here updates that order. Your documents stay as they are.': 'यहाँ स्वीकार किया गया कोटेशन उसी ऑर्डर को अपडेट करेगा। आपके दस्तावेज़ वैसे ही रहेंगे।',
+  'That order is already placed, so a quote you accept here starts a new order.': 'वह ऑर्डर हो चुका है, इसलिए यहाँ स्वीकार किया गया कोटेशन नया ऑर्डर शुरू करेगा।',
+  'Start a separate order': 'अलग नया ऑर्डर शुरू करें',
+  'Start a new chat? This conversation will be cleared.': 'नई चैट शुरू करें? यह बातचीत हट जाएगी।',
+  'New chat started. Your earlier order is still in your profile.': 'नई चैट शुरू हो गई। आपका पिछला ऑर्डर आपकी प्रोफ़ाइल में है।',
+
   // Redesign: new labels across the app
   'You are offline. What you have entered stays on this page until you are back online.': 'आप ऑफ़लाइन हैं। आपने जो भरा है, वह कनेक्शन लौटने तक इसी पेज पर रहेगा।',
   'Your quote is accepted. Next, verify your business.': 'आपका कोटेशन स्वीकार हो गया। अब अपने व्यवसाय का सत्यापन करें।',

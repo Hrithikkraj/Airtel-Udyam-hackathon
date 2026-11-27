@@ -201,7 +201,7 @@
   :root {
     --nav-offset: calc(5.25rem + env(safe-area-inset-bottom));
   }
-  @media (min-width: 768px) {
+  @media (min-width: 1024px) {
     :root {
       --nav-offset: 0px;
     }
@@ -305,7 +305,9 @@
   [role="tab"]:focus-visible,
   summary:focus-visible,
   [tabindex]:focus-visible,
-  label:has(input:focus-visible) {
+  /* Only labels that wrap a hidden choice or file input. Text fields show their own focus ring,
+     and browsers treat a clicked text field as focus-visible, which drew a square box round it. */
+  label:has(input:is([type="checkbox"], [type="radio"], [type="file"]):focus-visible) {
     outline: 3px solid var(--color-brand-600);
     outline-offset: 2px;
     box-shadow: 0 0 0 2px white;
@@ -552,6 +554,28 @@
     padding: 0.75rem 0.875rem;
     font-size: 1rem; /* 16px stops phones zooming in on focus */
     color: var(--color-ink-900);
+  }
+  /* The round chat box: quiet at rest, a darker edge under the mouse, and a clear red ring that
+     follows its round shape when typing. */
+  .input.chat-input {
+    border-radius: 999px;
+    border-color: var(--color-ink-200);
+    background: var(--color-ink-50);
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+  .input.chat-input:hover:not(:disabled) {
+    border-color: var(--color-ink-400);
+    background: white;
+  }
+  .input.chat-input:focus {
+    border-color: var(--color-brand-600);
+    background: white;
+    box-shadow: 0 0 0 4px var(--color-brand-100);
+  }
+  .input.chat-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
   .input-lg {
     min-height: 3.5rem;

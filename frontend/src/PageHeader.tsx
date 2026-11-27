@@ -13,14 +13,15 @@ type Props = {
   navItems?: NavItem[]
   onHome?: () => void
   wide?: boolean // Lines the title up with pages that use a wider grid, such as the rate list.
+  onStartFresh?: () => void // "New business": a clean home page with no quote or order.
 }
 
 // The top bar, then the page's own title: a large, friendly heading with one line of help under it.
-export default function PageHeader({ title, intro, isCompact = false, onBack, account, navItems, onHome, wide = false }: Props) {
+export default function PageHeader({ title, intro, isCompact = false, onBack, account, navItems, onHome, wide = false, onStartFresh }: Props) {
   const { t } = useLanguage()
   return (
     <>
-      <TopBar account={account} navItems={navItems} onHome={onHome} />
+      <TopBar account={account} navItems={navItems} onHome={onHome} onStartFresh={onStartFresh} />
       <div className={cx('mx-auto w-full px-4 pt-5 md:px-6 md:pt-8', wide ? 'max-w-5xl' : 'max-w-3xl')}>
         {onBack && (
           <button

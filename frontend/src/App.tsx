@@ -112,6 +112,10 @@ export default function App() {
   const [quoteLoadAttempt, setQuoteLoadAttempt] = useState(0)
   // A new number makes the quote page start fresh when a different quote is shown.
   const [quoteVersion, setQuoteVersion] = useState(0)
+  // A new number gives the chat and the short form a clean start. Bumped when the owner asks for a
+  // new chat, starts a new bundle, or switches to another order, so a conversation never carries
+  // over to an order it was not about.
+  const [chatVersion, setChatVersion] = useState(0)
   const legacyToken = useRef(startingOrder.legacyToken)
   // Which way the owner is moving, so the next page slides in from the right side (forward) or the
   // left side (back). The history depth tells the browser's own back button apart from forward.
@@ -291,11 +295,45 @@ export default function App() {
     goTo('form')
   }
 
+  // A clean conversation and short form, and no quote left over in memory from the last one.
+  function resetChat() {
+    setChatVersion((version) => version + 1)
+    setFormNotice(undefined)
+    forgetQuote()
+  }
+
   function startAgain() {
     clearOrderPointer()
     setSession(null)
-    setAcceptedRecommendation(undefined)
+    setOrderStatus(undefined)
+    resetChat()
     goTo(homeScreen)
+  }
+
+  // "Start fresh": back to a clean home page for a new business. Empty chat and short form, no quote,
+  // no rate-list picks, and no order being followed, so Quote, Verify and Order start from zero.
+  // Nothing is deleted: earlier orders and their documents stay on the owner's profile.
+  function startFresh() {
+    const hasSomething = Boolean(session || recommendation || Object.keys(plan).length)
+    if (hasSomething && !window.confirm(t('Start fresh for a new business? Your earlier orders stay safe in your profile.'))) return
+    clearOrderPointer()
+    setSession(null)
+    setOrderStatus(undefined)
+    setPlan({})
+    resetChat()
+    goTo(homeScreen)
+    if (hasSomething) toast({ tone: 'success', message: t('Fresh start. Tell the advisor about your new business.') })
+  }
+
+  // "New chat" in the advisor clears the conversation and stays with the same order.
+  // With separate = true it is a full fresh start for a new business.
+  function startNewChat(separate: boolean) {
+    if (separate) {
+      startFresh()
+      return
+    }
+    resetChat()
+    window.scrollTo(0, 0)
   }
 
   // The order can still take a changed quote: it is not placed, finished or cancelled.
@@ -416,6 +454,7 @@ export default function App() {
         account={accountButton}
         navItems={hasNav ? navItems : undefined}
         onHome={() => goTo(homeScreen)}
+        onStartFresh={hasNav ? startFresh : undefined}
         wide={screen === 'catalogue' || screen === 'staff'}
       />
       <OfflineBanner />
@@ -432,11 +471,18 @@ export default function App() {
       ) : (
         <main className={`mx-auto w-full flex-1 px-4 md:px-6 ${screen === 'staff' ? 'max-w-5xl' : 'max-w-3xl'}`}>
           <div hidden={screen !== 'advisor'}>
-            <AdvisorChat onDone={showQuote} onUseForm={openForm} />
+            <AdvisorChat
+              key={chatVersion}
+              onDone={showQuote}
+              onUseForm={openForm}
+              linkedOrderId={session?.orderId}
+              linkedOrderCanChange={orderCanChange}
+              onNewChat={startNewChat}
+            />
           </div>
           {/* Kept on the page while hidden, so going back does not lose the answers. */}
           <div hidden={screen !== 'form'}>
-            <GuidedForm notice={formNotice} onDone={showQuote} />
+            <GuidedForm key={chatVersion} notice={formNotice} onDone={showQuote} />
           </div>
           {screen === 'quote' && needsAcceptedQuote && (
             quoteLoadFailed ? (
@@ -498,6 +544,7 @@ export default function App() {
                 recommendation={recommendation}
                 city={city}
                 isAccepted={Boolean(session) && recommendation === acceptedRecommendation}
+                orderId={session?.orderId}
                 replaceOrderId={session && orderCanChange ? session.orderId : undefined}
                 onBack={goBack}
                 onViewOrder={() => goTo('order')}
@@ -521,6 +568,7 @@ export default function App() {
               onStartAgain={startAgain}
               onOpenQuote={() => goTo('quote')}
               onFindMore={() => goTo(homeScreen)}
+              onStartFresh={startFresh}
             />
           )}
           {screen === 'kyc' && session && (
@@ -547,12 +595,16 @@ export default function App() {
               account={account}
               onAccountChange={setAccount}
               onOpenOrder={(business, orderId) => {
+                // A different order has a different quote and its own conversation, so the chat
+                // starts clean unless the owner opened the order they were already on.
+                if (orderId !== session?.orderId) resetChat()
+                else forgetQuote()
                 followOrder({ orderId, businessId: business.business_id, hasGstin: business.has_gstin })
-                forgetQuote() // A different order has a different quote.
                 setOrderStatus(undefined)
                 goTo('order')
               }}
               onSignOut={signOutHere}
+              onStartFresh={startFresh}
             />
           )}
           {screen === 'staff' && (

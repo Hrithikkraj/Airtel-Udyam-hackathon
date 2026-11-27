@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowRight, CalendarDays, Check, ChevronDown, FlaskConical, PackageCheck, ReceiptText, RotateCw, Sparkles } from 'lucide-react'
+import { ArrowRight, CalendarDays, Check, ChevronDown, FlaskConical, PackageCheck, Plus, ReceiptText, RotateCw, Sparkles } from 'lucide-react'
 import { m } from 'motion/react'
 import PhoneRequest from './PhoneRequest'
 import ProductIcon from './ProductIcon'
@@ -32,6 +32,7 @@ type Props = {
   onStartAgain: () => void
   onOpenQuote?: () => void // Back to the accepted quote, to look at it or change it.
   onFindMore?: () => void // Back to the advisor or short form, for other suggestions.
+  onStartFresh?: () => void // A clean start for a different business. This order stays on the profile.
 }
 
 // Until the order is placed, the owner can still change the quote or look for other suggestions.
@@ -59,7 +60,7 @@ const STATUS_DOT: Record<BadgeTone, string> = {
   neutral: 'bg-ink-400',
 }
 
-export default function OrderPage({ orderId, onVerify, onStartAgain, onOpenQuote, onFindMore }: Props) {
+export default function OrderPage({ orderId, onVerify, onStartAgain, onOpenQuote, onFindMore, onStartFresh }: Props) {
   const { t } = useLanguage()
   const [order, setOrder] = useState<Order>()
   const [isBusy, setIsBusy] = useState(false)
@@ -363,6 +364,11 @@ export default function OrderPage({ orderId, onVerify, onStartAgain, onOpenQuote
         {(isActivated || isCancelled) && (
           <Button variant="secondary" onClick={onStartAgain}>
             {t('Start a new bundle')}
+          </Button>
+        )}
+        {onStartFresh && !isActivated && !isCancelled && (
+          <Button variant="secondary" icon={<Plus aria-hidden="true" size={18} />} onClick={onStartFresh}>
+            {t('Start fresh for a new business')}
           </Button>
         )}
       </section>

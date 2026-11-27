@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Building, ChevronRight, CircleCheck, CircleExclamationPoint, LogOut, Package, Smartphone, Trash, UserRound } from 'lucide-react'
+import { Building, ChevronRight, CircleCheck, CircleExclamationPoint, LogOut, Package, Plus, Smartphone, Trash, UserRound } from 'lucide-react'
 import { updateAccount, updateBusiness, type Account, type AccountBusiness } from './api'
 import { rupees } from './format'
 import { useLanguage } from './i18n'
@@ -21,6 +21,7 @@ type Props = {
   onAccountChange: (account: Account) => void
   onOpenOrder: (business: AccountBusiness, orderId: number) => void
   onSignOut: () => Promise<void>
+  onStartFresh?: () => void // A clean home page for a new business. Orders here are kept.
 }
 
 function savedDraft(account: Account): ProfileDraft {
@@ -50,7 +51,7 @@ function SettingsCard({ icon, title, children }: { icon: ReactNode; title: strin
   )
 }
 
-export default function ProfilePage({ account, onAccountChange, onOpenOrder, onSignOut }: Props) {
+export default function ProfilePage({ account, onAccountChange, onOpenOrder, onSignOut, onStartFresh }: Props) {
   const { t, setLanguage } = useLanguage()
   const saved = savedDraft(account)
   // Unsaved changes from earlier on this device are offered back, but only to the same account.
@@ -239,6 +240,14 @@ export default function ProfilePage({ account, onAccountChange, onOpenOrder, onS
 
       {/* ---------- Businesses, each with its orders ---------- */}
       <SettingsCard icon={<Building size={18} />} title={t('Your businesses and orders')}>
+        {onStartFresh && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-card bg-brand-50 p-4 ring-1 ring-brand-100">
+            <p className="min-w-0 flex-1 text-small text-ink-700">{t('Have another business? Start fresh with a new chat and a new quote.')}</p>
+            <Button size="sm" icon={<Plus aria-hidden="true" size={18} />} onClick={onStartFresh}>
+              {t('New business')}
+            </Button>
+          </div>
+        )}
         {account.businesses.length === 0 ? (
           <EmptyState
             picture="box"

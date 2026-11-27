@@ -108,9 +108,10 @@ type Props = {
   // The order this quote would replace. Set while the owner has an order that is not placed yet,
   // so accepting changes that order (and keeps its documents) instead of starting a second one.
   replaceOrderId?: number
+  orderId?: number // The order an accepted quote belongs to, shown so it is never a mystery.
 }
 
-export default function QuotePage({ profile, recommendation, city, isAccepted, onBack, onViewOrder, onSaved, replaceOrderId }: Props) {
+export default function QuotePage({ profile, recommendation, city, isAccepted, onBack, onViewOrder, onSaved, replaceOrderId, orderId }: Props) {
   // An accepted quote is read-only until the owner chooses to change it.
   const [isEditing, setIsEditing] = useState(false)
   const readOnly = isAccepted && !isEditing
@@ -232,7 +233,14 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
       <div className="mt-4 space-y-3">
       {readOnly && (
         <div className="notice-success">
-          <p className="font-medium">{t('You accepted this quote.')}</p>
+          <p className="font-medium">
+            {t('You accepted this quote.')}
+            {isAccepted && orderId !== undefined && (
+              <span className="ml-2 font-bold whitespace-nowrap">
+                {t('Order')} #{orderId}
+              </span>
+            )}
+          </p>
           {canChangeAccepted && (
             <button
               type="button"

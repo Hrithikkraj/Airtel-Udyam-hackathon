@@ -202,7 +202,7 @@ export default function CataloguePage({ plan, onPlanChange, onReviewed }: Props)
             <input
               id="rate-search"
               type="search"
-              className="input rounded-full! border-ink-200! bg-white pl-12 shadow-e1"
+              className="input chat-input bg-white pl-12 shadow-e1"
               placeholder={t('Search services')}
               value={query}
               onChange={(event) => setQuery(event.target.value)}

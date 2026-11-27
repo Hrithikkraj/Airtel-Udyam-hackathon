@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowDown, ArrowRight, Bot, Clock, ListChecks, Lock, SendHorizontal, Sparkles } from 'lucide-react'
+import { ArrowDown, ArrowRight, Bot, Clock, Link2, ListChecks, Lock, MessageSquarePlus, SendHorizontal, Sparkles, Unlink } from 'lucide-react'
 import { m, useInView, useReducedMotion } from 'motion/react'
 import { useLanguage } from './i18n'
 import { ApiError, sendAdvisorMessage, type AdvisorAnswers, type ChatMessage, type Profile, type Recommendation } from './api'
@@ -123,9 +123,16 @@ function answersChanged(before: AdvisorAnswers, after: AdvisorAnswers) {
 type Props = {
   onDone: (profile: Profile, recommendation: Recommendation, city: string | null) => void
   onUseForm: (notice?: string) => void
+  // The order this chat belongs to. A quote accepted here updates that order, so the owner is told.
+  linkedOrderId?: number
+  // False once the linked order is placed: a quote accepted here then starts a new order instead.
+  linkedOrderCanChange?: boolean
+  // Clears this conversation. With separate = true it also stops following the linked order, so the
+  // next quote starts a new order. The old order stays on the owner's profile.
+  onNewChat: (separate: boolean) => void
 }
 
-export default function AdvisorChat({ onDone, onUseForm }: Props) {
+export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOrderCanChange = false, onNewChat }: Props) {
   const { t, languageName } = useLanguage()
   // The language the advisor found in the owner's messages. Until the first reply, the website's
   // language is the hint. It is sent with each message so "2" or "ok" keeps the chat's language.
@@ -228,6 +235,12 @@ export default function AdvisorChat({ onDone, onUseForm }: Props) {
     return `${items}: ${rupees(quote.monthly_total_inr)} ${t('a month')}.${setup} ${quote.contract_months} ${t('month contract')}.`
   }
 
+  // Starting over asks first only when there is something to lose.
+  function startNewChat(separate: boolean) {
+    if (messages.length > 0 && !window.confirm(t('Start a new chat? This conversation will be cleared.'))) return
+    onNewChat(separate)
+  }
+
   const bundle = proposal?.recommendation.bundle
   // New messages rise in gently. Earlier ones are already on screen and stay still.
   const entrance = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { duration: DURATION.slow, ease: EASE_OUT } }
@@ -244,10 +257,36 @@ export default function AdvisorChat({ onDone, onUseForm }: Props) {
             {t('Replies in your language')}
           </p>
         </div>
-        <Button variant="ghost" size="sm" icon={<ListChecks aria-hidden="true" size={18} />} onClick={() => onUseForm()}>
-          {t('Use a short form instead')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-1">
+          <Button variant="ghost" size="sm" icon={<MessageSquarePlus aria-hidden="true" size={18} />} onClick={() => startNewChat(false)}>
+            {t('New chat')}
+          </Button>
+          <Button variant="ghost" size="sm" icon={<ListChecks aria-hidden="true" size={18} />} onClick={() => onUseForm()}>
+            {t('Use a short form instead')}
+          </Button>
+        </div>
       </div>
+
+      {/* Which order this conversation belongs to, so a quote never lands on the wrong order. */}
+      {linkedOrderId !== undefined && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-ink-100 bg-info-50 px-4 py-2.5 text-small sm:px-5">
+          <Link2 aria-hidden="true" size={16} className="shrink-0 text-info-700" />
+          <p className="min-w-0 flex-1">
+            <span className="font-bold">
+              {t('Linked to')} {t('Order')} #{linkedOrderId}.
+            </span>{' '}
+            {t(
+              linkedOrderCanChange
+                ? 'A quote you accept here updates that order. Your documents stay as they are.'
+                : 'That order is already placed, so a quote you accept here starts a new order.',
+            )}
+          </p>
+          {/* The way to a brand-new business: empty chat, no quote, no order. Shown for placed orders too. */}
+          <Button variant="secondary" size="sm" className="bg-white" icon={<Unlink aria-hidden="true" size={16} />} onClick={() => onNewChat(true)}>
+            {t('Start fresh for a new business')}
+          </Button>
+        </div>
+      )}
 
       <ul role="log" aria-live="polite" className="space-y-4 px-4 pt-5 pb-2 sm:px-5">
         <li className="flex items-end gap-2">
@@ -383,7 +422,7 @@ export default function AdvisorChat({ onDone, onUseForm }: Props) {
             <span className="sr-only">{t('Your answer')}</span>
             <input
               ref={inputRef}
-              className="input rounded-full! border-ink-200! bg-ink-50 px-5"
+              className="input chat-input"
               value={text}
               maxLength={1000}
               disabled={isBusy}
