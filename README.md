@@ -30,7 +30,9 @@ Open http://localhost:5173. Skip `npm install` after the first run.
 
 ## Turn on the advisor chat (optional)
 
-Copy `backend/.env.example` to `backend/.env`, add your Groq API key to the copy, and restart the backend. Git ignores `.env`, so keep keys there and never in `.env.example`, which is public. Without a key, the app opens a guided form that gives the same bundle and prices. If the LLM fails during a chat, the app moves to that form.
+Copy `backend/.env.example` to `backend/.env`, add your Groq API key to the copy, and restart the backend. Git ignores `.env`, so keep keys there and never in `.env.example`, which is public. Without a key, the app opens a guided form that gives the same bundle and prices. If the LLM fails during a chat, the error is shown and the owner can retry or switch to the guided form.
+
+If the chat opens but cannot reply, check the backend terminal for the provider's HTTP status (for example, 401 for a rejected key or 429 for a rate limit). The log does not include your API key or chat text. Use the `GROQ_API_KEY` variable shown in `backend/.env.example`.
 
 ## Accounts
 

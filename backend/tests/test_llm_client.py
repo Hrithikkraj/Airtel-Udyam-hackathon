@@ -103,3 +103,11 @@ def test_a_failed_call_never_exposes_the_customers_text(fake_server):
     with pytest.raises(llm.LLMUnavailable) as caught:
         llm.ask("system", [{"role": "user", "content": "my secret text"}], ExplanationText)
     assert "secret" not in str(caught.value)
+
+
+def test_provider_status_is_available_for_local_diagnostics(fake_server):
+    fake_server(httpx.Response(401, json={"error": "details must not be surfaced"}), httpx.Response(401, json={}))
+    with pytest.raises(llm.LLMUnavailable) as caught:
+        llm.ask("system", MESSAGES, ExplanationText)
+    assert "status 401" in str(caught.value)
+    assert "details must not be surfaced" not in str(caught.value)

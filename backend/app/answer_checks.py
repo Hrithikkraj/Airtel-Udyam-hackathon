@@ -285,9 +285,10 @@ def owner_typed(value: str, owner_texts: list[str]) -> bool:
 def city_not_served(name: str) -> Text:
     return (
         f"I couldn't match \"{name}\" to a location we currently serve. "
-        "If it's another city in India, could you share the state too? For example, \"Agra, Uttar Pradesh\".",
-        f"मुझे \"{name}\" अभी हमारे सेवा वाले शहरों में नहीं मिला। "
-        "अगर आपका व्यवसाय भारत के किसी और शहर में है, तो राज्य का नाम भी बता देंगे? जैसे \"आगरा, उत्तर प्रदेश\"।",
+        "If it's another city in India, could you share the state too? For example, \"Patna, Bihar\".",
+        f"हमें \"{name}\" उन शहरों में नहीं मिला। "
+        "अगर आपका व्यवसाय भारत के किसी और शहर में है, तो राज्य का नाम भी बता दें। "
+        "जैसे \"पटना, बिहार\"।",
     )
 
 
