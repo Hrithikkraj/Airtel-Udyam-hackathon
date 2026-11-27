@@ -275,6 +275,7 @@ export const HINDI: Record<string, string> = {
   // Chat
   "Hi! Tell me a little about your business and what you're hoping to improve. No need to have all the details ready—we can figure them out together.": 'नमस्ते! अपने व्यवसाय और जिन चीज़ों को बेहतर करना चाहते हैं, उनके बारे में थोड़ा बताइए। सारी जानकारी अभी होना ज़रूरी नहीं—हम बाकी बातें मिलकर समझ लेंगे।',
   'Use a short form instead': 'इसके बजाय छोटा फ़ॉर्म भरें',
+  'Use advisor chat instead': 'इसके बजाय सलाहकार से चैट करें',
   Language: 'भाषा',
   'Thinking…': 'सोच रहे हैं…',
   'Your answer': 'आपका जवाब',

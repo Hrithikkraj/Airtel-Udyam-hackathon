@@ -27,7 +27,6 @@ import {
   claimBusiness,
   fetchAcceptedQuote,
   fetchAccount,
-  fetchAdvisorStatus,
   fetchOrder,
   FIXED_ORDER_STATUSES,
   rememberOrder,
@@ -87,8 +86,6 @@ function historyDepth(): number {
 
 // Read once, at start-up. An older version kept the order secret here, and this removes it.
 const startingOrder = readOrderPointer()
-// A page asked for by its address, such as #/form, must not be swapped for another one.
-const openedByAddress = screenInAddress() !== null
 
 export default function App() {
   const { t, setLanguage } = useLanguage()
@@ -97,7 +94,7 @@ export default function App() {
   const [session, setSession] = useState<OrderPointer | null>(startingOrder.pointer)
   // undefined while checking, null when nobody is signed in on this browser.
   const [account, setAccount] = useState<Account | null | undefined>(undefined)
-  const [homeScreen, setHomeScreen] = useState<Screen>('form')
+  const homeScreen: Screen = 'advisor'
   const [profile, setProfile] = useState<Profile>()
   const [recommendation, setRecommendation] = useState<Recommendation>()
   const [acceptedRecommendation, setAcceptedRecommendation] = useState<Recommendation>()
@@ -139,7 +136,7 @@ export default function App() {
     const inAddress = screenInAddress()
     if (inAddress === 'order' || inAddress === 'kyc' || inAddress === 'quote') return session ? inAddress : 'form'
     if (inAddress) return inAddress
-    return session ? 'order' : 'form'
+    return session ? 'order' : 'advisor'
   })
 
   // Record the first page, so the browser address always matches what is on screen.
@@ -175,21 +172,6 @@ export default function App() {
     window.addEventListener('popstate', onBrowserBack)
     return () => window.removeEventListener('popstate', onBrowserBack)
   }, [canShow, session, homeScreen])
-
-  // Open the chat only if the LLM is switched on. Otherwise the form is the way in.
-  useEffect(() => {
-    fetchAdvisorStatus()
-      .then((status) => {
-        if (!status.available) return
-        setHomeScreen('advisor')
-        setScreen((current) => {
-          if (current !== 'form' || openedByAddress) return current
-          window.history.replaceState({ depth: historyDepth() }, '', '#/advisor')
-          return 'advisor'
-        })
-      })
-      .catch(() => {})
-  }, [])
 
   // If the server ends the session mid-journey, return to the sign-in page and say why.
   useEffect(() => {
@@ -482,6 +464,13 @@ export default function App() {
           </div>
           {/* Kept on the page while hidden, so going back does not lose the answers. */}
           <div hidden={screen !== 'form'}>
+            {homeScreen === 'advisor' && (
+              <p className="pt-4 text-small">
+                <button type="button" className="link" onClick={() => goTo('advisor')}>
+                  {t('Use advisor chat instead')}
+                </button>
+              </p>
+            )}
             <GuidedForm key={chatVersion} notice={formNotice} onDone={showQuote} />
           </div>
           {screen === 'quote' && needsAcceptedQuote && (

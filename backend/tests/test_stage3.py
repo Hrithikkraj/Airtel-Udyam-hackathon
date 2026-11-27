@@ -382,6 +382,7 @@ def test_an_unlisted_city_keeps_the_owner_in_the_chat_and_asks_for_its_state(cli
     body = response.json()
     assert body["answers"]["city"] is None
     assert "share the state too" in body["reply"]
+    assert "Patna, Bihar" in body["reply"]
 
 
 @pytest.mark.parametrize("typed, kept", [("Bangalore", "Bengaluru"), ("bombay", "Mumbai"), ("PUNE", "Pune"), ("Patna", "Patna")])

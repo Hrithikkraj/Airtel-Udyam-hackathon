@@ -67,5 +67,8 @@ def ask(system: str, messages: list[dict], response_shape: type[ResponseShape]) 
                 return response_shape.model_validate(json.loads(content))
             # Only the error type is kept, so customer text can never reach the logs.
             except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError, ValidationError) as error:
-                last_problem = type(error).__name__
+                if isinstance(error, httpx.HTTPStatusError):
+                    last_problem = f"{type(error).__name__} (status {error.response.status_code})"
+                else:
+                    last_problem = type(error).__name__
     raise LLMUnavailable(last_problem)
