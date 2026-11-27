@@ -84,6 +84,10 @@ class HelpRequest(BaseModel):
     phone: PhoneNumber | None = None  # Used only to call about this request.
 
 
+class PreferredInstallationDateRequest(BaseModel):
+    preferred_installation_date: date | None
+
+
 class OrderLine(BaseModel):
     product_id: str
     name: str
@@ -121,6 +125,7 @@ class OrderOut(BaseModel):
     contract_months: int
     install_days: int
     expected_activation: date | None
+    preferred_installation_date: date | None
     help_requested: bool
     demo_mode: bool
 
@@ -193,6 +198,7 @@ def build_order_out(order: Order, db: Session) -> OrderOut:
         contract_months=order.quote.contract_months,
         install_days=install_days_for(order, db),
         expected_activation=order.expected_activation,
+        preferred_installation_date=order.preferred_installation_date,
         help_requested=order.help_requested_at is not None,
         demo_mode=demo_mode(),
     )
@@ -218,6 +224,23 @@ def place_order(order: Order = Depends(get_owned_order), db: Session = Depends(g
     move_order(order, INSTALLATION_SCHEDULED, "customer", db)
     days = install_days_for(order, db)
     order.expected_activation = (utc_now() + timedelta(days=days)).date()
+    order.preferred_installation_date = None
+    db.commit()
+    return build_order_out(order, db)
+
+
+@router.put("/{order_id}/installation-date", response_model=OrderOut)
+def set_preferred_installation_date(
+    request: PreferredInstallationDateRequest,
+    order: Order = Depends(get_owned_order),
+    db: Session = Depends(get_db),
+):
+    if order.status != INSTALLATION_SCHEDULED:
+        raise HTTPException(status_code=409, detail="Choose an installation date after placing your verified order, before installation starts.")
+    if request.preferred_installation_date is not None:
+        if order.expected_activation is None or request.preferred_installation_date <= order.expected_activation:
+            raise HTTPException(status_code=422, detail="Choose a date after the expected date shown.")
+    order.preferred_installation_date = request.preferred_installation_date
     db.commit()
     return build_order_out(order, db)
 

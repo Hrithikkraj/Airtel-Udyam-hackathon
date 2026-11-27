@@ -200,6 +200,7 @@ class Order(Base):
     quote_id = Column(Integer, ForeignKey("quotes.quote_id"), nullable=False)
     status = Column(String, nullable=False)
     expected_activation = Column(Date)  # Set when the order is placed.
+    preferred_installation_date = Column(Date)
     help_requested_at = Column(DateTime)
     help_phone = Column(String)  # Deleted when the request closes.
     created_at = Column(DateTime, default=utc_now)

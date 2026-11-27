@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { ArrowRight, CalendarDays, Check, ChevronDown, FlaskConical, PackageCheck, Plus, ReceiptText, RotateCw, Sparkles } from 'lucide-react'
 import { m } from 'motion/react'
 import PhoneRequest from './PhoneRequest'
 import ProductIcon from './ProductIcon'
-import { cancelOrder, fetchOrder, requestHelp, advanceDemoOrder, placeOrder, type Order } from './api'
+import { cancelOrder, fetchOrder, requestHelp, advanceDemoOrder, placeOrder, setPreferredInstallationDate, type Order } from './api'
 import { rupees } from './format'
 import { useLanguage } from './i18n'
 import AnimatedCheck from './ui/AnimatedCheck'
@@ -12,6 +12,7 @@ import Button from './ui/Button'
 import Confetti from './ui/Confetti'
 import { cx } from './ui/cx'
 import EmptyState from './ui/EmptyState'
+import { TextField } from './ui/Field'
 import { DURATION, EASE_OUT } from './ui/motionTokens'
 import { Loading, Skeleton, SkeletonText } from './ui/Skeleton'
 
@@ -24,7 +25,14 @@ function shortDate(day: string) {
   return new Date(`${day}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+function dateAfter(day: string) {
+  const next = new Date(`${day}T00:00:00`)
+  next.setDate(next.getDate() + 1)
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
+}
+
 const REFRESH_EVERY_MS = 20000
+const INSTALLATION_DATE_STATUSES = ['installation_scheduled', 'installation_in_progress', 'activated']
 
 type Props = {
   orderId: number
@@ -63,8 +71,10 @@ const STATUS_DOT: Record<BadgeTone, string> = {
 export default function OrderPage({ orderId, onVerify, onStartAgain, onOpenQuote, onFindMore, onStartFresh }: Props) {
   const { t } = useLanguage()
   const [order, setOrder] = useState<Order>()
+  const [preferredDateDraft, setPreferredDateDraft] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
   const [error, setError] = useState('')
+  const preferredDate = preferredDateDraft ?? order?.preferred_installation_date ?? ''
 
   const load = useCallback(() => {
     fetchOrder(orderId)
@@ -92,6 +102,25 @@ export default function OrderPage({ orderId, onVerify, onStartAgain, onOpenQuote
     } finally {
       setIsBusy(false)
     }
+  }
+
+  async function updatePreferredDate(value: string | null) {
+    setIsBusy(true)
+    setError('')
+    try {
+      const updated = await setPreferredInstallationDate(orderId, value)
+      setOrder(updated)
+      setPreferredDateDraft(null)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'That did not work. Try again.')
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  function savePreferredDate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (preferredDate) void updatePreferredDate(preferredDate)
   }
 
   function cancel() {
@@ -143,6 +172,8 @@ export default function OrderPage({ orderId, onVerify, onStartAgain, onOpenQuote
 
   const isActivated = order.status === 'activated'
   const isCancelled = order.status === 'cancelled'
+  const canChangePreferredDate = order.status === 'installation_scheduled' && Boolean(order.expected_activation)
+  const showPreferredDate = INSTALLATION_DATE_STATUSES.includes(order.status) && (order.status === 'installation_scheduled' || Boolean(order.preferred_installation_date))
   const doneSteps = order.steps.filter((step) => step.state === 'done').length
   // The line down the tracker fills to the middle of the current step.
   const fill = order.steps.length > 1 ? Math.min(1, Math.max(0, (doneSteps - (isActivated ? 1 : 0.5)) / (order.steps.length - 1))) : 1
@@ -178,6 +209,46 @@ export default function OrderPage({ orderId, onVerify, onStartAgain, onOpenQuote
             <CalendarDays aria-hidden="true" size={16} />
             {t('Expected by')} {shortDate(order.expected_activation)}
           </p>
+        )}
+
+        {showPreferredDate && (
+          <div className="mt-4 rounded-control bg-ink-50 p-4">
+            {order.preferred_installation_date ? (
+              <p role="status" className="flex items-start gap-2 font-semibold text-success-700">
+                <Check aria-hidden="true" size={18} className="mt-0.5 shrink-0" />
+                <span>
+                  {t('Your preferred installation date is saved for')} {shortDate(order.preferred_installation_date)}.
+                </span>
+              </p>
+            ) : (
+              <p className="font-semibold">{t('Choose a preferred installation date if it is more convenient for you.')}</p>
+            )}
+            <p className="mt-1 text-small text-ink-600">{t('This saves your preference in the tracker; it does not confirm a partner appointment.')}</p>
+            {canChangePreferredDate && (
+              <form onSubmit={savePreferredDate} className="mt-4 flex flex-wrap items-end gap-3">
+                <TextField
+                  type="date"
+                  label={t('Preferred installation date')}
+                  hint={t('Choose a date after the expected date shown above.')}
+                  min={order.expected_activation ? dateAfter(order.expected_activation) : undefined}
+                  value={preferredDate}
+                  onChange={(event) => {
+                    setPreferredDateDraft(event.target.value)
+                    setError('')
+                  }}
+                  wrapperClassName="w-full max-w-sm"
+                />
+                <Button type="submit" isLoading={isBusy} disabled={!preferredDate} className="min-w-32">
+                  {t(order.preferred_installation_date ? 'Save date change' : 'Save preferred date')}
+                </Button>
+                {order.preferred_installation_date && (
+                  <Button type="button" variant="secondary" isLoading={isBusy} onClick={() => void updatePreferredDate(null)}>
+                    {t('Remove date')}
+                  </Button>
+                )}
+              </form>
+            )}
+          </div>
         )}
 
         {order.next_action === 'verify' && (

@@ -58,6 +58,8 @@ Use the "Staff sign in" link on the first page. In demo mode the key is `accel-d
 
 No real installation partner is connected, so the tracker shows a clearly labelled button that moves an order through installation. Set `DEMO_MODE=false` in `backend/.env` to remove it.
 
+After a verified order is placed, owners can optionally save a preferred installation date later than the expected date. They can change or remove it until installation starts; the tracker shows the saved preference. It is not a confirmed partner appointment.
+
 ## Run the tests
 
 ```powershell

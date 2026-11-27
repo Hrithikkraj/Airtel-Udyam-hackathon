@@ -281,6 +281,7 @@ export type Order = {
   contract_months: number
   install_days: number
   expected_activation: string | null
+  preferred_installation_date: string | null
   help_requested: boolean
   demo_mode: boolean
 }
@@ -292,6 +293,11 @@ export const fetchOrder = (orderId: number) => orderRequest(orderId)
 export const placeOrder = (orderId: number) => orderRequest(orderId, 'place')
 export const cancelOrder = (orderId: number) => orderRequest(orderId, 'cancel')
 export const advanceDemoOrder = (orderId: number) => orderRequest(orderId, 'demo-advance')
+export const setPreferredInstallationDate = (orderId: number, preferredInstallationDate: string | null) =>
+  send<Order>(`/api/orders/${orderId}/installation-date`, {
+    method: 'PUT',
+    json: { preferred_installation_date: preferredInstallationDate },
+  })
 export const requestHelp = (orderId: number, phone: string) =>
   send<Order>(`/api/orders/${orderId}/help`, { json: { phone } }).catch(() => {
     throw new Error('That did not work. Check the number and try again.')

@@ -31,6 +31,15 @@ def post_order(client, new_order, action):
     return client.post(f"/api/orders/{saved['order_id']}/{action}", headers=headers)
 
 
+def set_preferred_date(client, new_order, preferred_installation_date):
+    saved, headers = new_order
+    return client.put(
+        f"/api/orders/{saved['order_id']}/installation-date",
+        json={"preferred_installation_date": preferred_installation_date},
+        headers=headers,
+    )
+
+
 def give_consent(client, new_order):
     saved, headers = new_order
     version = client.get("/api/kyc/notice").json()["version"]
@@ -207,6 +216,32 @@ def test_full_journey_reaches_activated(client, new_order, monkeypatch):
     assert all(step["state"] == "done" for step in done["steps"])
     assert all(step["at"] for step in done["steps"])
     assert [entry["label"] for entry in done["timeline"]][-1] == "Activated"
+
+
+def test_owner_can_save_change_and_remove_a_preferred_installation_date(client, new_order, monkeypatch):
+    assert set_preferred_date(client, new_order, "2027-01-01").status_code == 409
+    verify_everything(client, new_order, monkeypatch)
+    assert set_preferred_date(client, new_order, "2027-01-01").status_code == 409
+
+    placed = post_order(client, new_order, "place").json()
+    expected = date.fromisoformat(placed["expected_activation"])
+    assert placed["preferred_installation_date"] is None
+    assert set_preferred_date(client, new_order, expected.isoformat()).status_code == 422
+
+    first_choice = (expected + timedelta(days=1)).isoformat()
+    saved = set_preferred_date(client, new_order, first_choice)
+    assert saved.status_code == 200
+    assert saved.json()["preferred_installation_date"] == first_choice
+    assert get_order(client, new_order)["preferred_installation_date"] == first_choice
+
+    changed_choice = (expected + timedelta(days=3)).isoformat()
+    assert set_preferred_date(client, new_order, changed_choice).json()["preferred_installation_date"] == changed_choice
+    assert set_preferred_date(client, new_order, None).json()["preferred_installation_date"] is None
+
+    set_preferred_date(client, new_order, changed_choice)
+    post_order(client, new_order, "demo-advance")
+    assert set_preferred_date(client, new_order, None).status_code == 409
+    assert get_order(client, new_order)["preferred_installation_date"] == changed_choice
 
 
 def test_tracker_marks_the_current_step(client, new_order, monkeypatch):

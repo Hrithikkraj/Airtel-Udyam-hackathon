@@ -32,6 +32,7 @@ def turn_on_foreign_keys(connection, _record):
 LATER_COLUMNS = [
     ("businesses", "user_id", "INTEGER REFERENCES users(user_id)"),
     ("quotes", "accepted_with", "JSON"),
+    ("orders", "preferred_installation_date", "DATE"),
 ]
 
 
