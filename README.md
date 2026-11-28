@@ -4,6 +4,11 @@ A phone-first journey that lets a small business owner choose a bundle, buy it, 
 
 ## Run it on Windows
 
+**direct command run**
+```
+.\start.bat
+```
+
 You need Python 3.11+ and Node 20+. Use two terminals, starting from the project folder.
 
 **Terminal 1: backend**
