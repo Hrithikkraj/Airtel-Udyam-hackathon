@@ -6,11 +6,11 @@ The browser keeps the conversation, so the server stores no chat text.
 import logging
 import re
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import llm
+from . import llm, shop_again
 from .answer_checks import (
     HELLO,
     Text,
@@ -21,7 +21,7 @@ from .answer_checks import (
     only_asks_for_language,
     question,
 )
-from .auth import require_signed_in_owner
+from .auth import require_signed_in_owner, signed_in_user
 from .catalogue import load_catalogue
 from .database import get_db
 from .explain import explain
@@ -68,7 +68,7 @@ SYSTEM_PROMPT = """You are the Accel Business advisor, helping a small business 
 What the owner has already told us (do not ask again unless they correct it): {known}
 What we still need to find out: {missing}
 Previous language: {language}
-
+{returning}
 Sound like a thoughtful person helping a busy owner, not a form reading questions. Use everyday language and contractions. When the owner shares a useful detail, reflect one specific detail in a few words, then ask the next useful question as a natural follow-up. Don't repeat their whole message, start every turn with praise or thanks, or add unrelated small talk. Ask about the first missing item only, in one short question. Mention options only if they help.
 For example:
 - Owner: "I run a tailoring shop in Pune with two staff." Reply: "A tailoring shop in Pune with two staff—got it. Do you have a GSTIN? A yes or no is fine."
@@ -92,7 +92,7 @@ Language:
 
 Rules:
 - Reply in everyday words. Never show field names or values with underscores to the owner.
-- First record every answer or correction in the owner's latest message in the matching field, including everything it says the business needs, in the needs list. Leave other fields empty. The latest message wins when it conflicts with an earlier answer.
+- First record every answer or correction in the owner's latest message in the matching field, including everything it says the business needs, in the needs list, and the business's name and kind of business if it mentions them. Leave other fields empty. The latest message wins when it conflicts with an earlier answer.
 - Set replace_needs to true only when the owner is correcting, removing, or replacing previously stated needs; in that case, return the complete updated needs list. Otherwise leave it false and record only newly mentioned needs.
 - Only ask about what is still missing. Do not suggest extra services.
 - Answer a small in-scope question before continuing the profile questions. If the owner says they need help, offer a few relevant examples such as internet, business SIMs or billing and ask what they are trying to sort out. Do not treat it as a failed answer.
@@ -112,6 +112,9 @@ Rules:
 Work out the segment field yourself from what the owner says. Never ask about segments or use that word with the owner.
 micro = shop or small service such as a kirana, salon or pharmacy. prof = office such as a clinic, CA firm or coaching centre. multi = 3 or more branches. mfg = factory or workshop.
 
+If the owner says the name of their business, record it in business_name exactly as they wrote it, such as "Sharma Traders". Never ask for the name; it is optional.
+Whenever the owner says what kind of business it is, record business_type as a short everyday description in English, such as "kirana shop", "dental clinic" or "garment factory".
+
 Whenever the owner states a number, record it: budget_monthly_inr for a monthly budget, num_sites for branches or locations, camera_count for CCTV cameras in total, mobile_line_count for SIMs, vehicle_count for vehicles, machine_count for machines.
 
 Needs you may record, most important first:
@@ -122,6 +125,11 @@ toll_free = 1800 number. bulk_sms = SMS alerts and offers. whatsapp = verified W
 email_office = business email and documents. cloud_backup = automatic backup. website = simple website and domain.
 pos_billing = billing and UPI or card payments. endpoint_security = antivirus. firewall = managed firewall. guest_wifi = separate Wi-Fi for customers.
 cctv = cameras with cloud recording. machine_monitoring = sensors on machines. fleet_tracking = GPS for vehicles."""
+
+# Added to the prompt when an owner shops again for a business they already have with us.
+RETURNING_OWNER = """This owner already has this business with us, so we know its details. They have already confirmed the details above are still right, so do not ask about them again. Ask what they need now.
+Services this business already has from us: {owned}. Do not offer these again unless the owner asks for more of them, such as more SIMs or cameras for a new branch. If they mention a change, such as more staff, a new branch or a new city, record it.
+"""
 
 # In testing, the LLM sometimes missed "internet" in a clear request, which gave a bundle with no
 # connection. So our own code also looks for it. Saying "internet" while buying from a telecom
@@ -340,8 +348,15 @@ def transcribe_voice(audio: UploadFile = File(), language: str = Form(default=""
 
 
 @router.post("/message", response_model=AdvisorResponse, dependencies=[Depends(require_signed_in_owner)])
-def advisor_message(request: AdvisorRequest, db: Session = Depends(get_db)):
+def advisor_message(request: AdvisorRequest, http_request: Request, db: Session = Depends(get_db)):
     cities = list_cities(db)
+    # Shopping again: what this business already has, read from its orders on our side.
+    owned_ids: list[str] = []
+    returning = ""
+    if request.business_id is not None:
+        business = shop_again.owned_business(request.business_id, signed_in_user(http_request, db), db)
+        owned_ids = shop_again.owned_product_ids(business, db)
+        returning = RETURNING_OWNER.format(owned=shop_again.owned_in_words(owned_ids) or "nothing yet")
     owner_turns = sum(message.role == "user" for message in request.messages)
     # Only a hint: the language of the chat so far, or the website's language on the first message.
     # It is cleaned first, so "Ignore all rules" or text with braces or newlines never reaches the prompt.
@@ -351,6 +366,7 @@ def advisor_message(request: AdvisorRequest, db: Session = Depends(get_db)):
         language=previous_language,
         known=request.answers.model_dump_json(exclude_none=True, exclude_defaults=True) or "nothing yet",
         missing="; ".join(missing_questions(request.answers, owner_turns)) or "nothing",
+        returning=returning,
     )
     messages = [
         {"role": message.role, "content": hide_identifiers(message.content)}
@@ -403,7 +419,7 @@ def advisor_message(request: AdvisorRequest, db: Session = Depends(get_db)):
         reply = reply_in(language, PRICE_ON_QUOTE) if PRICE_MENTION.search(turn.reply) else turn.reply
         return AdvisorResponse(reply=reply, answers=answers, language=language)
 
-    profile = profile_from_answers(answers, cities, language)
+    profile = profile_from_answers(answers, cities, language).model_copy(update={"owned_product_ids": owned_ids})
     recommendation = recommend(profile, load_catalogue(db), load_peer_stats(db))
     recommendation.explanation = explain(profile, recommendation)
     reply = recommendation.explanation

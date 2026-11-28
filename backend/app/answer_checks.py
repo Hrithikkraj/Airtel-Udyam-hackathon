@@ -328,6 +328,12 @@ def check_new_answers(turn: AdvisorTurn, owner_texts: list[str], cities: list[Ci
             keep["city"] = None
             problems.append(city_not_served(turn.city.strip()))
 
+    # A business name is kept only if the owner wrote it, so the LLM cannot invent one. The type of
+    # business may be the LLM's own words ("kirana shop"), as it only describes what the owner said.
+    if turn.business_name is not None:
+        if not has_non_latin_letters(latest) and not owner_typed(turn.business_name, owner_texts):
+            keep["business_name"] = None
+
     for field, (smallest, largest) in NUMBER_LIMITS.items():
         value = getattr(turn, field)
         if value is not None and not smallest <= value <= largest:

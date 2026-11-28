@@ -73,8 +73,7 @@ export default function TopBar({ account, navItems, onHome, onStartFresh }: Prop
               onClick={onStartFresh}
               aria-label={t('New business: start fresh')}
               title={t('New business: start fresh')}
-              // Hidden on phones, where the advisor, Order and Profile pages carry the same button.
-              className="hidden size-11 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white shadow-brand transition-[transform,background-color] duration-200 hover:bg-brand-700 active:scale-95 sm:flex xl:w-auto xl:gap-1.5 xl:px-4 xl:text-small xl:font-bold"
+              className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white shadow-brand transition-[transform,background-color] duration-200 hover:bg-brand-700 active:scale-95 xl:w-auto xl:gap-1.5 xl:px-4 xl:text-small xl:font-bold"
             >
               <Plus aria-hidden="true" size={20} strokeWidth={2.5} />
               <span className="hidden xl:inline">{t('New business')}</span>

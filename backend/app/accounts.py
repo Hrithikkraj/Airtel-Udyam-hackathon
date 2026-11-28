@@ -9,11 +9,12 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from .access import has_access
 from .auth import (
+    cookies_are_secure,
     end_session,
     forget_failed_sign_ins,
     hash_password,
@@ -26,7 +27,8 @@ from .auth import (
     too_many_failed_sign_ins,
 )
 from .database import get_db
-from .models import Business, Order, User, utc_now
+from .models import Business, Consent, KycRecord, Order, OrderEvent, Quote, QuoteItem, User, utc_now
+from .order_state import INSTALLATION_IN_PROGRESS, INSTALLATION_SCHEDULED
 from .orders import STATUS_LABELS
 from .schemas import PhoneNumber
 
@@ -36,6 +38,8 @@ router = APIRouter(prefix="/api/account", tags=["account"], dependencies=[Depend
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 Language = Literal["English", "Hindi"]
 WRONG_SIGN_IN = "Email or password is incorrect."
+# A business cannot be deleted while a partner is booked to visit or is on site.
+INSTALLATION_UNDER_WAY = {INSTALLATION_SCHEDULED, INSTALLATION_IN_PROGRESS}
 
 
 def clean_email(value: str) -> str:
@@ -221,6 +225,43 @@ def update_business(
     if changes.business_type is not None:
         business.business_type = changes.business_type.strip() or None
     db.commit()
+    return build_profile(user, db)
+
+
+@router.delete("/businesses/{business_id}", response_model=ProfileOut)
+def delete_business(
+    business_id: int, response: Response, user: User = Depends(require_user), db: Session = Depends(get_db)
+):
+    """Deletes a business and everything kept for it: its orders and their timelines, its quotes, its
+    KYC details and its consents. It cannot be undone.
+
+    Refused while an installation is booked or under way, because a partner is about to visit or
+    is already on site. The owner cancels the order first, or asks our team.
+    """
+    business = db.get(Business, business_id)
+    if business is None or business.user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="You do not have access to this")
+    orders = db.scalars(select(Order).where(Order.business_id == business_id)).all()
+    if any(order.status in INSTALLATION_UNDER_WAY for order in orders):
+        raise HTTPException(
+            status_code=409,
+            detail="An installation is booked or under way for this business. Cancel that order first, or ask our team for help.",
+        )
+    order_ids = [order.order_id for order in orders]
+    quote_ids = list(db.scalars(select(Quote.quote_id).where(Quote.business_id == business_id)))
+    # Children first, so no row is left pointing at one that is gone.
+    if order_ids:
+        db.execute(delete(OrderEvent).where(OrderEvent.order_id.in_(order_ids)))
+        db.execute(delete(Order).where(Order.order_id.in_(order_ids)))
+    if quote_ids:
+        db.execute(delete(QuoteItem).where(QuoteItem.quote_id.in_(quote_ids)))
+        db.execute(delete(Quote).where(Quote.quote_id.in_(quote_ids)))
+    db.execute(delete(KycRecord).where(KycRecord.business_id == business_id))
+    db.execute(delete(Consent).where(Consent.business_id == business_id))
+    db.execute(delete(Business).where(Business.business_id == business_id))
+    db.commit()
+    # This browser's key to the business is useless now, so it is removed too.
+    response.delete_cookie(order_cookie_name(business_id), path="/api", secure=cookies_are_secure(), httponly=True, samesite="lax")
     return build_profile(user, db)
 
 

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowDown, ArrowRight, Bot, Clock, Link2, ListChecks, Lock, MessageSquarePlus, Mic, SendHorizontal, Sparkles, Square, Unlink, Volume2, VolumeX } from 'lucide-react'
+import { ArrowDown, ArrowRight, Bot, Clock, Link2, ListChecks, Lock, MessageSquarePlus, Mic, SendHorizontal, Sparkles, Square, Store, Unlink, Volume2, VolumeX } from 'lucide-react'
 import { m, useInView, useReducedMotion } from 'motion/react'
 import { useLanguage } from './i18n'
-import { ApiError, sendAdvisorMessage, transcribeAudio, type AdvisorAnswers, type ChatMessage, type Profile, type Recommendation } from './api'
+import { ApiError, sendAdvisorMessage, transcribeAudio, type AdvisorAnswers, type BusinessNames, type ChatMessage, type Profile, type Recommendation } from './api'
 import { rupees } from './format'
 import { canRecord, canSpeak, useSpeech, useVoiceRecorder, type VoiceProblem } from './voice'
 import AnimatedNumber from './ui/AnimatedNumber'
@@ -18,6 +18,17 @@ const EXAMPLES = [
   'I run a dental clinic in Pune with 8 staff',
   'We have 5 restaurants in Bengaluru',
 ]
+// For an owner shopping again: their business is known, so the examples are about what to add.
+const RETURNING_EXAMPLES = ['I need 2 more business SIMs', 'Add CCTV cameras', 'I want WhatsApp for my customers']
+
+// A business the owner already has. The chat starts from its saved details instead of asking again.
+export type ReturningBusiness = {
+  businessId: number
+  businessName: string
+  answers: AdvisorAnswers
+  // What it already has from us, by name, for the greeting.
+  ownedNames: string[]
+}
 
 // Matches only when the whole message is one of these, so "haan but add CCTV" goes to the advisor.
 const wholeMessage = (choices: string[]) =>
@@ -105,7 +116,13 @@ function shortReplyLanguage(typed: string, current: string) {
   return current
 }
 
-type ProposedQuote = { profile: Profile; recommendation: Recommendation; city: string | null }
+type ProposedQuote = { profile: Profile; recommendation: Recommendation; city: string | null; business: BusinessNames }
+
+// The name and type the owner mentioned, if any, so the quote can fill them in.
+function namesFrom(answers: AdvisorAnswers): BusinessNames {
+  const text = (value: unknown) => (typeof value === 'string' ? value : '')
+  return { name: text(answers.business_name), type: text(answers.business_type) }
+}
 
 // The two most important reasons from the product details already in the reply. No extra request.
 function topReasons(recommendation: Recommendation) {
@@ -123,7 +140,7 @@ function answersChanged(before: AdvisorAnswers, after: AdvisorAnswers) {
 }
 
 type Props = {
-  onDone: (profile: Profile, recommendation: Recommendation, city: string | null) => void
+  onDone: (profile: Profile, recommendation: Recommendation, city: string | null, business: BusinessNames) => void
   onUseForm: (notice?: string) => void
   // The order this chat belongs to. A quote accepted here updates that order, so the owner is told.
   linkedOrderId?: number
@@ -132,16 +149,25 @@ type Props = {
   // Clears this conversation. With separate = true it also stops following the linked order, so the
   // next quote starts a new order. The old order stays on the owner's profile.
   onNewChat: (separate: boolean) => void
+  // Set when shopping again for a business the owner already has.
+  returning?: ReturningBusiness
 }
 
-export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOrderCanChange = false, onNewChat }: Props) {
+export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOrderCanChange = false, onNewChat, returning }: Props) {
   const { t, languageName } = useLanguage()
   // The language the advisor found in the owner's messages. Until the first reply, the website's
   // language is the hint. It is sent with each message so "2" or "ok" keeps the chat's language.
   const [detectedLanguage, setDetectedLanguage] = useState<string | null>(null)
   const chatLanguage = detectedLanguage ?? languageName
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [answers, setAnswers] = useState<AdvisorAnswers>({})
+  // A returning owner's saved details are already known, so the advisor only asks what they need now.
+  const [answers, setAnswers] = useState<AdvisorAnswers>(() => returning?.answers ?? {})
+  const greeting = returning
+    ? `${t('Welcome back!')} ${t('I already know')} ${returning.businessName}${
+        returning.ownedNames.length > 0 ? ` ${t('and that you have')} ${returning.ownedNames.join(', ')}` : ''
+      }. ${t('What do you need today?')}`
+    : t(GREETING)
+  const examples = returning ? RETURNING_EXAMPLES : EXAMPLES
   const [text, setText] = useState('')
   const [isBusy, setIsBusy] = useState(false)
   const [proposal, setProposal] = useState<ProposedQuote | null>(null)
@@ -182,7 +208,7 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
     }
     // Turning it on reads the latest advisor message, so the owner hears that it works.
     const latest = [...messages].reverse().find((message) => message.role === 'assistant')
-    const content = latest?.content ?? t(GREETING)
+    const content = latest?.content ?? greeting
     if (!speech.speak(content, latest ? chatLanguage : languageName)) {
       setVoiceNotice(t('This phone has no voice for this language, so replies are shown as text only.'))
     }
@@ -266,7 +292,7 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
     const revisingProposal = proposal !== null
     setIsBusy(true)
     try {
-      const answer = await sendAdvisorMessage(updated, chatLanguage, answers)
+      const answer = await sendAdvisorMessage(updated, chatLanguage, answers, returning?.businessId)
       // Only a reply that arrived changes the chat's language. A failed request keeps it as it was.
       const replyLanguage = answer.language || chatLanguage
       setDetectedLanguage(replyLanguage)
@@ -276,6 +302,7 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
           profile: answer.profile,
           recommendation: answer.recommendation,
           city: answer.answers.city ?? null,
+          business: namesFrom(answer.answers),
         }
         setProposal(nextProposal)
         const proposalLine = chatLine(revisingProposal ? 'revisedProposal' : 'firstProposal', replyLanguage)
@@ -309,7 +336,7 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
       { role: 'assistant', content: chatLine('toQuote', replyLanguage) },
     ])
     setProposal(null)
-    onDone(nextProposal.profile, nextProposal.recommendation, nextProposal.city)
+    onDone(nextProposal.profile, nextProposal.recommendation, nextProposal.city, nextProposal.business)
   }
 
   function quoteSummary(recommendation: Recommendation) {
@@ -372,6 +399,22 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
         </div>
       </div>
 
+      {/* Shopping again: which business this conversation is for, so a quote lands on the right one. */}
+      {returning && linkedOrderId === undefined && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-ink-100 bg-success-50 px-4 py-2.5 text-small sm:px-5">
+          <Store aria-hidden="true" size={16} className="shrink-0 text-success-700" />
+          <p className="min-w-0 flex-1">
+            <span className="font-bold">
+              {t('Shopping for')} {returning.businessName}.
+            </span>{' '}
+            {t('A quote you accept here is added to this business.')}
+          </p>
+          <Button variant="secondary" size="sm" className="bg-white" icon={<Unlink aria-hidden="true" size={16} />} onClick={() => onNewChat(true)}>
+            {t('Start fresh for a new business')}
+          </Button>
+        </div>
+      )}
+
       {/* Which order this conversation belongs to, so a quote never lands on the wrong order. */}
       {linkedOrderId !== undefined && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-ink-100 bg-info-50 px-4 py-2.5 text-small sm:px-5">
@@ -396,13 +439,13 @@ export default function AdvisorChat({ onDone, onUseForm, linkedOrderId, linkedOr
       <ul role="log" aria-live="polite" className="space-y-4 px-4 pt-5 pb-2 sm:px-5">
         <li className="flex items-end gap-2">
           <AdvisorAvatar size="sm" />
-          <p className="bubble-advisor max-w-[85%]">{t(GREETING)}</p>
+          <p className="bubble-advisor max-w-[85%]">{greeting}</p>
         </li>
         {messages.length === 0 && (
           <li className="pl-10">
             <p className="eyebrow">{t('For example:')}</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {EXAMPLES.map((example) => (
+              {examples.map((example) => (
                 <Chip
                   key={example}
                   className="whitespace-normal! text-left"

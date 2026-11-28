@@ -28,6 +28,14 @@ npm run dev
 
 Open http://localhost:5173. Skip `npm install` after the first run.
 
+After the initial setup, start both servers from the project folder with:
+
+```powershell
+.\start.bat
+```
+
+This opens a terminal for each server. You can also double-click `start.bat` in File Explorer.
+
 ## Turn on the advisor chat (optional)
 
 Copy `backend/.env.example` to `backend/.env`, add your Groq API key to the copy, and restart the backend. Git ignores `.env`, so keep keys there and never in `.env.example`, which is public. Without a key, the app opens a guided form that gives the same bundle and prices. If the LLM fails during a chat, the error is shown and the owner can retry or switch to the guided form.

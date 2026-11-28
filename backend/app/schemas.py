@@ -69,6 +69,10 @@ class BusinessProfile(BaseModel):
     quantities: dict[str, Annotated[int, Field(ge=1)]] = {}
     current_internet: CurrentInternet | None = None  # Only used to explain the change.
     preferred_language: str = Field(default="English", max_length=30)
+    # Products this business already has from us, on an earlier order. They count as present when a
+    # product needs a partner (CCTV needs a connection) and are not suggested again. The server sets
+    # this itself from the business's orders before saving, so a browser cannot claim what it lacks.
+    owned_product_ids: list[str] = Field(default=[], max_length=40)
 
 
 class BundleItem(BaseModel):
@@ -181,9 +185,13 @@ class Recommendation(BaseModel):
 
 class SaveQuoteRequest(QuoteRequest):
     business_name: str | None = Field(default=None, max_length=120)
+    business_type: str | None = Field(default=None, max_length=80)
     city: str | None = Field(default=None, max_length=60)
     # Who built the bundle, so a reopened quote explains it the same way.
     chosen_by: Literal["advisor", "owner"] = "advisor"
+    # Set when the owner orders again for a business they already have. The new order joins that
+    # business, so its details and its verified documents are used again.
+    business_id: int | None = None
 
 
 class AcceptedQuoteOut(BaseModel):
@@ -192,6 +200,8 @@ class AcceptedQuoteOut(BaseModel):
     recommendation: Recommendation
     city: str | None = None
     can_change: bool  # False once the order is placed or cancelled.
+    business_name: str | None = None
+    business_type: str | None = None
 
 
 class QuoteSaved(BaseModel):
@@ -201,6 +211,8 @@ class QuoteSaved(BaseModel):
     access_token: str
     status: str
     quote: QuoteOut
+    # Where the new order starts. kyc_complete when the business was already verified.
+    order_status: str = ""
 
 
 class CityOut(BaseModel):
@@ -224,6 +236,9 @@ class AdvisorMessage(BaseModel):
 
 class AdvisorAnswers(BaseModel):
     """What the owner has told the advisor so far. It has no field for a product or a price."""
+    # Only shown on the quote and saved on the business. They never change what is recommended.
+    business_name: str | None = None
+    business_type: str | None = None
     employee_count: int | None = None
     num_sites: int | None = None
     city: str | None = Field(default=None, max_length=60)
@@ -238,11 +253,23 @@ class AdvisorAnswers(BaseModel):
     vehicle_count: int | None = None
     machine_count: int | None = None
 
+    @field_validator("business_name", "business_type", mode="before")
+    @classmethod
+    def short_text(cls, value, info):
+        # A long or odd value from the LLM must not fail the whole turn, so it is trimmed instead.
+        if not isinstance(value, str):
+            return None
+        limit = 120 if info.field_name == "business_name" else 80
+        return " ".join(value.split())[:limit] or None
+
 
 class AdvisorRequest(BaseModel):
     messages: list[AdvisorMessage] = Field(min_length=1, max_length=40)
     preferred_language: str = Field(default="English", max_length=30)
     answers: AdvisorAnswers = AdvisorAnswers()  # The browser sends these back each turn.
+    # Set when the owner shops again for a business they already have. The server then reads what
+    # that business already has from us, so the advisor builds on it instead of starting over.
+    business_id: int | None = None
 
 
 class AdvisorTurn(AdvisorAnswers):

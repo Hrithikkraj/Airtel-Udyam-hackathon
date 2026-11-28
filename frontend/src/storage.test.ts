@@ -4,6 +4,7 @@ import {
   KEYS,
   clearDeviceData,
   clearOrderPointer,
+  followFreshDetails,
   readLanguage,
   readOrderPointer,
   readProfileDraft,
@@ -133,6 +134,32 @@ describe('profile draft', () => {
     const storage = fakeStorage()
     saveProfileDraft(1, { ...DRAFT, password: 'secret', token: 'x' } as never, storage, NOW)
     expect(storage.data.get(KEYS.profileDraft)).not.toMatch(/secret|token|password/)
+  })
+})
+
+describe('fresh profile details', () => {
+  const before = { full_name: 'Asha', phone: '', businesses: { '7': { business_name: '', business_type: '' } } }
+  const after = {
+    full_name: 'Asha',
+    phone: '',
+    businesses: {
+      '7': { business_name: 'Sanjay Medicals', business_type: 'dental clinic' },
+      '9': { business_name: 'New Shop', business_type: 'kirana shop' },
+    },
+  }
+
+  it('shows a name the advisor saved, and a business that is new since the page opened', () => {
+    expect(followFreshDetails(before, before, after)).toEqual(after)
+  })
+
+  it('keeps what the owner is typing', () => {
+    const typing = { ...before, businesses: { '7': { business_name: 'My own name', business_type: '' } } }
+    const result = followFreshDetails(typing, before, after)
+    expect(result.businesses['7']).toEqual({ business_name: 'My own name', business_type: 'dental clinic' })
+  })
+
+  it('drops a business that was deleted', () => {
+    expect(followFreshDetails(before, before, { ...before, businesses: {} }).businesses).toEqual({})
   })
 })
 

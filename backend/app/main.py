@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from . import accounts, advisor, bundles, callbacks, catalogue, kyc, orders, quotes, staff
+from . import accounts, advisor, bundles, callbacks, catalogue, kyc, orders, quotes, shop_again, staff
 from .database import Base, add_later_columns, engine
 
 
@@ -24,6 +24,7 @@ app.include_router(orders.router)
 app.include_router(callbacks.router)
 app.include_router(staff.router)
 app.include_router(accounts.router)
+app.include_router(shop_again.router)
 
 
 @app.get("/api/health")

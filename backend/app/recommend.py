@@ -108,6 +108,11 @@ def default_quantity(product_id: str, profile: BusinessProfile) -> int:
     return quantity_rule(product_id, profile)[0]
 
 
+def owned_ids(profile: BusinessProfile) -> set[str]:
+    """Products the business already has from us, on an earlier order."""
+    return set(profile.owned_product_ids)
+
+
 def connection_options(profile: BusinessProfile, segment: str) -> list[str | None]:
     """Connections worth trying. None means no connection, if the owner did not ask for one."""
     options: list[str | None] = list(STANDARD_CONNECTIONS)
@@ -145,9 +150,11 @@ def score_bundle(profile, segment, product_ids: set[str]) -> ScoreParts:
     needs_covered = round(60 * covered / len(needs))
 
     best = best_connections_for(profile, segment)
-    if best[0] in product_ids:
+    # A connection the business already has fits its size just as well as a new one.
+    with_owned = product_ids | owned_ids(profile)
+    if best[0] in with_owned:
         size_fit = 30
-    elif best[1:] and best[1] in product_ids:
+    elif best[1:] and best[1] in with_owned:
         size_fit = 15
     else:
         size_fit = 0
@@ -169,7 +176,8 @@ def wanted_product_ids(profile: BusinessProfile) -> list[str]:
 
 def build_items(connection_id, profile, wanted_ids, catalogue) -> list[BundleItem]:
     """One connection plus every wanted product that is allowed to go with it."""
-    ids = {connection_id} if connection_id else set()
+    # What the business already has counts as present, so CCTV can join the broadband it has.
+    ids = ({connection_id} if connection_id else set()) | owned_ids(profile)
     chosen = [connection_id] if connection_id else []
     for product_id in wanted_ids:
         product = catalogue[product_id]
@@ -232,7 +240,13 @@ def is_worth_offering(items, connection_id, profile, catalogue) -> bool:
         return False
     if connection_id is None or CONNECTION_NEEDS.intersection(profile.needs):
         return True
-    return any(connection_id in catalogue[item.product_id].requires_one_of for item in items)
+    # A second connection is only worth it when something needs one the business does not have yet.
+    owned = owned_ids(profile)
+    return any(
+        connection_id in catalogue[item.product_id].requires_one_of
+        and not owned.intersection(catalogue[item.product_id].requires_one_of)
+        for item in items
+    )
 
 
 def build_candidates(profile, segment, catalogue) -> list[list[BundleItem]]:
@@ -292,10 +306,11 @@ def alternatives_to(best, ranked, profile, segment, catalogue, peer_stats=None, 
 def explain_not_included(best_ids, wanted_ids, profile, catalogue) -> list[NotIncluded]:
     """Tell the owner why something they asked for cannot be sold to them."""
     results = []
+    present_ids = set(best_ids) | owned_ids(profile)
     for product_id in wanted_ids:
         product = catalogue[product_id]
         reasons = ineligibility_reasons(product, profile)
-        problem = missing_dependency(product, best_ids, catalogue)
+        problem = missing_dependency(product, present_ids, catalogue)
         if reasons:
             results.append(NotIncluded(product_id=product_id, name=product.name, reasons=reasons))
         elif problem and product_id not in best_ids:
@@ -346,7 +361,9 @@ def build_addons(
         if product_id not in best_ids and product_id not in excluded_ids:
             add(product_id, "You asked for this, but it is over your budget", was_cut=True)
 
-    already_used = set(best_ids) | {addon.product_id for addon in addons} | set(excluded_ids)
+    # Nothing the business already has from us is suggested again.
+    already_used = set(best_ids) | {addon.product_id for addon in addons} | set(excluded_ids) | owned_ids(profile)
+    present_ids = set(best_ids) | owned_ids(profile)
     has_mobile = bool(already_used.intersection({"P07", "P08"}))
     suggestions = 0
     for product_id in SUGGESTED_ADDONS[segment]:
@@ -355,7 +372,7 @@ def build_addons(
             break
         if product_id in already_used or (has_mobile and product_id in {"P07", "P08"}):
             continue
-        if ineligibility_reasons(product, profile) or missing_dependency(product, best_ids, catalogue):
+        if ineligibility_reasons(product, profile) or missing_dependency(product, present_ids, catalogue):
             continue
         add(product_id, "Popular with businesses like yours")
         suggestions += 1

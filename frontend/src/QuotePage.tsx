@@ -9,7 +9,8 @@ import { cx } from './ui/cx'
 import Switch from './ui/Switch'
 import ProductDetailPanel from './ProductDetailPanel'
 import { useLanguage } from './i18n'
-import { priceBundle, replaceAcceptedQuote, requestCallback, saveQuote, type BundleItem, type ProductDetail, type Profile, type Quote, type Recommendation, type RecommendedBundle, type SavedQuote } from './api'
+import { priceBundle, replaceAcceptedQuote, requestCallback, saveQuote, type BundleItem, type BusinessNames, type ProductDetail, type Profile, type Quote, type Recommendation, type RecommendedBundle, type SavedQuote } from './api'
+import { TextField } from './ui/Field'
 import { rupees } from './format'
 
 // One product the owner can switch on or off on this page.
@@ -109,9 +110,15 @@ type Props = {
   // so accepting changes that order (and keeps its documents) instead of starting a second one.
   replaceOrderId?: number
   orderId?: number // The order an accepted quote belongs to, shown so it is never a mystery.
+  // Shopping again: accepting adds a new order to this business the owner already has.
+  shopFor?: { businessId: number; businessName: string }
+  // The business's name and type, as the advisor heard them. The owner can change both here.
+  business?: BusinessNames
 }
 
-export default function QuotePage({ profile, recommendation, city, isAccepted, onBack, onViewOrder, onSaved, replaceOrderId, orderId }: Props) {
+export default function QuotePage({ profile, recommendation, city, isAccepted, onBack, onViewOrder, onSaved, replaceOrderId, orderId, shopFor, business }: Props) {
+  const [businessName, setBusinessName] = useState(business?.name ?? '')
+  const [businessType, setBusinessType] = useState(business?.type ?? '')
   // An accepted quote is read-only until the owner chooses to change it.
   const [isEditing, setIsEditing] = useState(false)
   const readOnly = isAccepted && !isEditing
@@ -171,10 +178,11 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
     setMessage('')
     try {
       const chosenBy = recommendation.chosen_by ?? 'advisor'
+      const names = { name: businessName.trim(), type: businessType.trim() }
       onSaved(
         replaceOrderId !== undefined
-          ? await replaceAcceptedQuote(replaceOrderId, profile, items, city, chosenBy)
-          : await saveQuote(profile, items, city, chosenBy),
+          ? await replaceAcceptedQuote(replaceOrderId, profile, items, city, chosenBy, names)
+          : await saveQuote(profile, items, city, chosenBy, shopFor?.businessId, names),
       )
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'The quote could not be saved. Try again.')
@@ -275,6 +283,11 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
       )}
       {!isAccepted && replaceOrderId !== undefined && (
         <p className="notice font-medium">{t('Accepting this replaces the quote in your current order. Your documents stay as they are.')}</p>
+      )}
+      {!isAccepted && replaceOrderId === undefined && shopFor && (
+        <p className="notice font-medium">
+          {t('Accepting this adds a new order to')} {shopFor.businessName}.
+        </p>
       )}
       </div>
 
@@ -510,6 +523,39 @@ export default function QuotePage({ profile, recommendation, city, isAccepted, o
             ))}
           </ul>
         </details>
+      )}
+
+      {/* ---------- Whose business this is. Filled in from the chat, and the owner can change it ---------- */}
+      {bundle && (
+        <section aria-labelledby="business-title" className="card mt-6">
+          <h2 id="business-title" className="text-title-2 font-extrabold">
+            {t('Your business')}
+          </h2>
+          <p className="mt-1 text-small text-ink-500">
+            {t(
+              businessName || businessType
+                ? 'We filled this in from what you told us. Change it if anything is wrong.'
+                : 'Optional. It helps you find this order later in your profile.',
+            )}
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <TextField
+              label={t('Business name')}
+              maxLength={120}
+              disabled={readOnly}
+              value={businessName}
+              onChange={(event) => setBusinessName(event.target.value)}
+            />
+            <TextField
+              label={t('Type of business')}
+              maxLength={80}
+              disabled={readOnly}
+              placeholder={t('For example, dental clinic')}
+              value={businessType}
+              onChange={(event) => setBusinessType(event.target.value)}
+            />
+          </div>
+        </section>
       )}
 
       <button type="button" className="link mt-6" onClick={onBack}>

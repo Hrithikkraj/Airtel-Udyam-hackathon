@@ -31,6 +31,8 @@ export type Profile = {
   current_internet: string | null
   preferred_language: string
   quantities?: Record<string, number>
+  // What the business already has from us. The server sets this itself when an order is saved.
+  owned_product_ids?: string[]
 }
 
 export type BundleItem = { product_id: string; quantity: number }
@@ -185,11 +187,13 @@ export function trimAdvisorMessages(messages: ChatMessage[]): ChatMessage[] {
 }
 
 // `language` is only a hint: the chat's language so far. The server works out the language itself.
-export const sendAdvisorMessage = (messages: ChatMessage[], language: string, answers: AdvisorAnswers) =>
+// `businessId` is set when shopping again for a business the owner already has.
+export const sendAdvisorMessage = (messages: ChatMessage[], language: string, answers: AdvisorAnswers, businessId?: number) =>
   request<AdvisorReply>('/api/advisor/message', {
     messages: trimAdvisorMessages(messages),
     preferred_language: language,
     answers,
+    ...(businessId !== undefined ? { business_id: businessId } : {}),
   })
 
 export const fetchRecommendation = (profile: Profile) =>
@@ -208,13 +212,70 @@ export type SavedQuote = {
   business_id: number
   status: string
   quote: Quote
+  // Where the new order starts: kyc_complete when the business was already verified.
+  order_status?: string
 }
 
-export const saveQuote = (profile: Profile, items: BundleItem[], city: string | null, chosenBy: 'advisor' | 'owner' = 'advisor') =>
-  request<SavedQuote>('/api/quotes', { profile, items, city, chosen_by: chosenBy })
+// The business's name and type, filled in from the chat. Empty text keeps what is saved.
+export type BusinessNames = { name: string; type: string }
+const namesBody = (names?: BusinessNames) => ({ business_name: names?.name || null, business_type: names?.type || null })
+
+// With businessId, the order joins a business the owner already has, and its verified documents are used again.
+export const saveQuote = (
+  profile: Profile,
+  items: BundleItem[],
+  city: string | null,
+  chosenBy: 'advisor' | 'owner' = 'advisor',
+  businessId?: number,
+  names?: BusinessNames,
+) =>
+  request<SavedQuote>('/api/quotes', {
+    profile,
+    items,
+    city,
+    chosen_by: chosenBy,
+    ...namesBody(names),
+    ...(businessId !== undefined ? { business_id: businessId } : {}),
+  })
+
+// ---------- Shop again for a business the owner already has ----------
+
+export type OwnedProduct = { product_id: string; name: string; quantity: number }
+export type ShopAgain = {
+  business_id: number
+  business_name: string | null
+  business_type: string | null
+  city: string | null
+  employee_count: number
+  num_sites: number
+  has_gstin: boolean
+  kyc_verified: boolean
+  owned: OwnedProduct[]
+  last_order_id: number | null
+  last_order: OwnedProduct[]
+  answers: AdvisorAnswers
+}
+// The details the owner confirmed on "Is this still right?".
+export type ConfirmedDetails = { employee_count: number; num_sites: number; city: string | null; has_gstin: boolean }
+
+export const fetchShopAgain = (businessId: number) => request<ShopAgain>(`/api/shop-again/${businessId}`)
+
+// The last order's products again, at today's prices, as a quote the owner can still change.
+export const reorderForBusiness = (businessId: number, details: ConfirmedDetails, language: string) =>
+  request<{ profile: Profile; recommendation: Recommendation; city: string | null }>(`/api/shop-again/${businessId}/reorder`, {
+    ...details,
+    preferred_language: language,
+  })
 
 // The quote behind an order, so the owner can go back to it from any later step, even after a reload.
-export type AcceptedQuote = { profile: Profile; recommendation: Recommendation; city: string | null; can_change: boolean }
+export type AcceptedQuote = {
+  profile: Profile
+  recommendation: Recommendation
+  city: string | null
+  can_change: boolean
+  business_name?: string | null
+  business_type?: string | null
+}
 export const fetchAcceptedQuote = (orderId: number) => request<AcceptedQuote>(`/api/quotes/for-order/${orderId}`)
 
 // Changes the quote of an order that is not placed yet. Same order, and the documents are kept.
@@ -224,7 +285,12 @@ export const replaceAcceptedQuote = (
   items: BundleItem[],
   city: string | null,
   chosenBy: 'advisor' | 'owner' = 'advisor',
-) => send<SavedQuote>(`/api/quotes/for-order/${orderId}`, { method: 'PUT', json: { profile, items, city, chosen_by: chosenBy } })
+  names?: BusinessNames,
+) =>
+  send<SavedQuote>(`/api/quotes/for-order/${orderId}`, {
+    method: 'PUT',
+    json: { profile, items, city, chosen_by: chosenBy, ...namesBody(names) },
+  })
 
 // Orders in these states can no longer change their quote.
 export const FIXED_ORDER_STATUSES = ['installation_scheduled', 'installation_in_progress', 'activated', 'cancelled']
@@ -391,5 +457,8 @@ export const updateAccount = (changes: { full_name?: string; phone?: string; cle
 
 export const updateBusiness = (businessId: number, changes: { business_name: string; business_type: string }) =>
   send<Account>(`/api/account/businesses/${businessId}`, { method: 'PATCH', json: changes })
+
+// Deletes the business with all its orders, quotes and KYC details. It cannot be undone.
+export const deleteBusiness = (businessId: number) => send<Account>(`/api/account/businesses/${businessId}`, { method: 'DELETE' })
 
 export const claimBusiness = (businessId: number) => send<Account>(`/api/account/claim/${businessId}`, { method: 'POST' })

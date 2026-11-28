@@ -41,7 +41,7 @@ from .kyc_rules import (
     compare_documents,
 )
 from .models import Business, Consent, KycRecord
-from .order_state import ORDER_PLACED_STATUSES, order_for_business, update_order_after_kyc
+from .order_state import documents_can_change, update_order_after_kyc
 
 router = APIRouter(prefix="/api/kyc", tags=["kyc"])
 
@@ -195,7 +195,7 @@ def status_after_change(business: Business, db: Session, actor: str = "system") 
 
 
 def refuse_if_order_placed(business: Business, db: Session):
-    if order_for_business(business.business_id, db).status in ORDER_PLACED_STATUSES:
+    if not documents_can_change(business.business_id, db):
         raise HTTPException(status_code=409, detail="Your order has been placed, so documents can no longer be changed here.")
 
 

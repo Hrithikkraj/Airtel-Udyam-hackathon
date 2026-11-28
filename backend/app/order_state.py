@@ -15,7 +15,8 @@ ACTIVATED = "activated"
 CANCELLED = "cancelled"
 
 ALLOWED_MOVES = {
-    QUOTE_CONFIRMED: {KYC_PENDING, CANCELLED},
+    # A repeat order for a business that is already verified goes straight to KYC_COMPLETE.
+    QUOTE_CONFIRMED: {KYC_PENDING, KYC_REVIEW, KYC_COMPLETE, NEEDS_ASSISTANCE, CANCELLED},
     KYC_PENDING: {KYC_REVIEW, KYC_COMPLETE, NEEDS_ASSISTANCE, CANCELLED},
     KYC_REVIEW: {KYC_PENDING, KYC_COMPLETE, NEEDS_ASSISTANCE, CANCELLED},
     KYC_COMPLETE: {KYC_PENDING, KYC_REVIEW, NEEDS_ASSISTANCE, INSTALLATION_SCHEDULED, CANCELLED},
@@ -53,20 +54,31 @@ def move_order(order: Order, new_status: str, actor: str, db: Session):
     order.status = new_status
 
 
-def order_for_business(business_id: int, db: Session) -> Order:
-    return db.scalars(select(Order).where(Order.business_id == business_id)).one()
+def orders_for_business(business_id: int, db: Session) -> list[Order]:
+    """Every order of a business, oldest first. A business can order again, so it may have several."""
+    return list(db.scalars(select(Order).where(Order.business_id == business_id).order_by(Order.order_id)))
+
+
+def documents_can_change(business_id: int, db: Session) -> bool:
+    """Documents lock once an order is placed, unless a newer order of the same business is still
+    waiting for them (an owner who orders again may need to add a document, such as a GST certificate)."""
+    orders = orders_for_business(business_id, db)
+    if any(order.status not in ORDER_PLACED_STATUSES and order.status != CANCELLED for order in orders):
+        return True
+    return not any(order.status in ORDER_PLACED_STATUSES for order in orders)
 
 
 def update_order_after_kyc(business_id: int, kyc_status: str, has_consent: bool, db: Session, actor: str = "system"):
-    """Called after every KYC change, so the tracker always matches the documents."""
-    order = order_for_business(business_id, db)
-    if order.status == CANCELLED or order.status == ACTIVATED:
-        return
-    if order.status == QUOTE_CONFIRMED and not has_consent:
-        return
-    if order.status in {INSTALLATION_SCHEDULED, INSTALLATION_IN_PROGRESS}:
-        # Only withdrawing consent can reach this point, as uploads are locked once placed.
-        if not has_consent:
-            move_order(order, NEEDS_ASSISTANCE, "customer", db)
-        return
-    move_order(order, ORDER_STATUS_FOR_KYC[kyc_status], actor, db)
+    """Called after every KYC change, so every order's tracker always matches the documents.
+    KYC belongs to the business, so one verification covers each order it places."""
+    for order in orders_for_business(business_id, db):
+        if order.status == CANCELLED or order.status == ACTIVATED:
+            continue
+        if order.status == QUOTE_CONFIRMED and not has_consent:
+            continue
+        if order.status in {INSTALLATION_SCHEDULED, INSTALLATION_IN_PROGRESS}:
+            # Only withdrawing consent can reach this point, as uploads are locked once placed.
+            if not has_consent:
+                move_order(order, NEEDS_ASSISTANCE, "customer", db)
+            continue
+        move_order(order, ORDER_STATUS_FOR_KYC[kyc_status], actor, db)

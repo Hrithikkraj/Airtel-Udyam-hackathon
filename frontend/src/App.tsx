@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { House, LayoutGrid, Package, ReceiptText, User } from 'lucide-react'
-import AdvisorChat from './AdvisorChat'
+import AdvisorChat, { type ReturningBusiness } from './AdvisorChat'
 import AuthPage from './AuthPage'
 import BottomNav from './BottomNav'
 import CataloguePage, { type Plan } from './CataloguePage'
@@ -11,6 +11,7 @@ import OrderPage from './OrderPage'
 import PageHeader from './PageHeader'
 import ProfilePage from './ProfilePage'
 import QuotePage from './QuotePage'
+import ShopAgainPage from './ShopAgainPage'
 import { useLanguage } from './i18n'
 import type { NavItem } from './navigation'
 import PageTransition from './ui/PageTransition'
@@ -33,13 +34,17 @@ import {
   signOut,
   SIGNED_OUT_EVENT,
   type Account,
+  type AccountBusiness,
+  type BusinessNames,
+  type ConfirmedDetails,
   type Profile,
   type Recommendation,
+  type ShopAgain,
 } from './api'
 import { clearOrderPointer, clearProfileDraft, readOrderPointer, saveOrderPointer, type OrderPointer } from './storage'
 
-type Screen = 'advisor' | 'form' | 'quote' | 'order' | 'kyc' | 'catalogue' | 'staff' | 'signin' | 'signup' | 'profile'
-const SCREENS: Screen[] = ['advisor', 'form', 'quote', 'order', 'kyc', 'catalogue', 'staff', 'signin', 'signup', 'profile']
+type Screen = 'advisor' | 'form' | 'quote' | 'order' | 'kyc' | 'catalogue' | 'staff' | 'signin' | 'signup' | 'profile' | 'shop'
+const SCREENS: Screen[] = ['advisor', 'form', 'quote', 'order', 'kyc', 'catalogue', 'staff', 'signin', 'signup', 'profile', 'shop']
 
 const TITLES: Record<Screen, { title: string; intro: string }> = {
   advisor: { title: 'Find the right bundle', intro: 'Answer a few questions and see one clear monthly price.' },
@@ -52,6 +57,7 @@ const TITLES: Record<Screen, { title: string; intro: string }> = {
   signin: { title: 'Welcome to Accel Business', intro: 'Sign in or create an account to find the right bundle for your business.' },
   signup: { title: 'Create your account', intro: 'It takes a minute. Then find the right bundle for your business.' },
   profile: { title: 'Your profile', intro: 'Your details, your businesses and your orders.' },
+  shop: { title: 'Shop for your business', intro: 'Check your details, then reorder or ask the advisor for something new.' },
 }
 
 // Where the Back button goes when there is no earlier page in this visit, such as after a reload.
@@ -64,9 +70,11 @@ const PARENT: Partial<Record<Screen, Screen | 'home'>> = {
   signin: 'home',
   signup: 'home',
   profile: 'home',
+  shop: 'profile',
 }
 
 const STEP_FOR_SCREEN: Partial<Record<Screen, StepKey>> = {
+  shop: 'choose',
   advisor: 'choose',
   form: 'choose',
   quote: 'quote',
@@ -99,6 +107,8 @@ export default function App() {
   const [recommendation, setRecommendation] = useState<Recommendation>()
   const [acceptedRecommendation, setAcceptedRecommendation] = useState<Recommendation>()
   const [city, setCity] = useState<string | null>(null)
+  // The business's name and type for the quote page, as heard by the advisor or saved before.
+  const [quoteBusiness, setQuoteBusiness] = useState<BusinessNames>()
   const [formNotice, setFormNotice] = useState<string>()
   // What the owner has picked on the rate list. Kept here so going back to the list keeps it.
   const [plan, setPlan] = useState<Plan>({})
@@ -113,6 +123,10 @@ export default function App() {
   // new chat, starts a new bundle, or switches to another order, so a conversation never carries
   // over to an order it was not about.
   const [chatVersion, setChatVersion] = useState(0)
+  // Shopping again: the business on the "Is this still right?" page, and then the business the chat
+  // and the quote are for. A quote accepted then adds an order to that business.
+  const [shopBusinessId, setShopBusinessId] = useState<number>()
+  const [returning, setReturning] = useState<ReturningBusiness>()
   const legacyToken = useRef(startingOrder.legacyToken)
   // Which way the owner is moving, so the next page slides in from the right side (forward) or the
   // left side (back). The history depth tells the browser's own back button apart from forward.
@@ -126,15 +140,18 @@ export default function App() {
       if (wanted === null) return false
       if (wanted === 'quote') return Boolean((recommendation && profile) || session)
       if (wanted === 'order' || wanted === 'kyc') return Boolean(session)
+      if (wanted === 'shop') return shopBusinessId !== undefined
       return true
     },
-    [recommendation, profile, session],
+    [recommendation, profile, session, shopBusinessId],
   )
 
   const [screen, setScreen] = useState<Screen>(() => {
     if (sessionStorage.getItem('accel-staff-key')) return 'staff'
     const inAddress = screenInAddress()
     if (inAddress === 'order' || inAddress === 'kyc' || inAddress === 'quote') return session ? inAddress : 'form'
+    // After a reload the page no longer knows which business it was for, so it starts from the profile.
+    if (inAddress === 'shop') return 'profile'
     if (inAddress) return inAddress
     return session ? 'order' : 'advisor'
   })
@@ -197,6 +214,7 @@ export default function App() {
         setRecommendation(accepted.recommendation)
         setAcceptedRecommendation(accepted.recommendation)
         setCity(accepted.city)
+        setQuoteBusiness({ name: accepted.business_name ?? '', type: accepted.business_type ?? '' })
         setQuoteVersion((version) => version + 1)
       })
       .catch(() => {
@@ -256,10 +274,11 @@ export default function App() {
     setSession(pointer)
   }
 
-  function showQuote(newProfile: Profile, newRecommendation: Recommendation, newCity: string | null = null) {
+  function showQuote(newProfile: Profile, newRecommendation: Recommendation, newCity: string | null = null, business?: BusinessNames) {
     setProfile(newProfile)
     setRecommendation(newRecommendation)
     setCity(newCity)
+    setQuoteBusiness(business)
     setQuoteVersion((version) => version + 1)
     goTo('quote')
   }
@@ -288,8 +307,41 @@ export default function App() {
     clearOrderPointer()
     setSession(null)
     setOrderStatus(undefined)
+    setReturning(undefined)
     resetChat()
     goTo(homeScreen)
+  }
+
+  // ---------- Shopping again for a business the owner already has ----------
+
+  function openShopAgain(business: AccountBusiness) {
+    setShopBusinessId(business.business_id)
+    goTo('shop')
+  }
+
+  // The chat and the quote are now for this business. The order being followed is left alone (it
+  // stays on the profile), so a new quote adds a new order instead of changing that one.
+  function shopFor(shop: ShopAgain, details: ConfirmedDetails) {
+    clearOrderPointer()
+    setSession(null)
+    setOrderStatus(undefined)
+    resetChat()
+    setReturning({
+      businessId: shop.business_id,
+      businessName: shop.business_name || t('your business'),
+      answers: { ...shop.answers, ...details },
+      ownedNames: shop.owned.map((item) => item.name),
+    })
+  }
+
+  function askAdvisorFor(shop: ShopAgain, details: ConfirmedDetails) {
+    shopFor(shop, details)
+    goTo('advisor')
+  }
+
+  function reorderFor(shop: ShopAgain, details: ConfirmedDetails, newProfile: Profile, newRecommendation: Recommendation, newCity: string | null) {
+    shopFor(shop, details)
+    showQuote(newProfile, newRecommendation, newCity, { name: shop.business_name ?? '', type: shop.business_type ?? '' })
   }
 
   // "Start fresh": back to a clean home page for a new business. Empty chat and short form, no quote,
@@ -302,6 +354,7 @@ export default function App() {
     setSession(null)
     setOrderStatus(undefined)
     setPlan({})
+    setReturning(undefined)
     resetChat()
     goTo(homeScreen)
     if (hasSomething) toast({ tone: 'success', message: t('Fresh start. Tell the advisor about your new business.') })
@@ -460,6 +513,7 @@ export default function App() {
               linkedOrderId={session?.orderId}
               linkedOrderCanChange={orderCanChange}
               onNewChat={startNewChat}
+              returning={returning}
             />
           </div>
           {/* Kept on the page while hidden, so going back does not lose the answers. */}
@@ -535,16 +589,27 @@ export default function App() {
                 isAccepted={Boolean(session) && recommendation === acceptedRecommendation}
                 orderId={session?.orderId}
                 replaceOrderId={session && orderCanChange ? session.orderId : undefined}
+                shopFor={returning ? { businessId: returning.businessId, businessName: returning.businessName } : undefined}
+                business={quoteBusiness}
                 onBack={goBack}
                 onViewOrder={() => goTo('order')}
                 onSaved={(saved) => {
                   followOrder({ orderId: saved.order_id, businessId: saved.business_id, hasGstin: profile.has_gstin })
-                  if (recommendation.chosen_by === 'owner') setPlan({}) // The plan is now an order.
+                  if (recommendation.chosen_by === 'owner' && !returning) setPlan({}) // The plan is now an order.
                   // The server now holds exactly what was accepted, including any changes made on
                   // the page. The quote page loads that next time, so it never shows an older copy.
                   forgetQuote()
                   setOrderStatus(undefined)
-                  toast({ tone: 'success', message: t('Your quote is accepted. Next, verify your business.') })
+                  // A business verified before needs no documents again, so the order is ready to place.
+                  const alreadyVerified = saved.order_status === 'kyc_complete'
+                  toast({
+                    tone: 'success',
+                    message: t(
+                      alreadyVerified
+                        ? 'Your quote is accepted. Your business is already verified, so confirm your order now.'
+                        : 'Your quote is accepted. Next, verify your business.',
+                    ),
+                  })
                   goTo('order')
                 }}
               />
@@ -586,14 +651,41 @@ export default function App() {
               onOpenOrder={(business, orderId) => {
                 // A different order has a different quote and its own conversation, so the chat
                 // starts clean unless the owner opened the order they were already on.
-                if (orderId !== session?.orderId) resetChat()
-                else forgetQuote()
+                if (orderId !== session?.orderId) {
+                  resetChat()
+                  setReturning(undefined)
+                } else forgetQuote()
                 followOrder({ orderId, businessId: business.business_id, hasGstin: business.has_gstin })
                 setOrderStatus(undefined)
                 goTo('order')
               }}
               onSignOut={signOutHere}
               onStartFresh={startFresh}
+              onShopAgain={openShopAgain}
+              onBusinessDeleted={(businessId) => {
+                // Nothing on this page may keep pointing at the deleted business or its orders.
+                if (session?.businessId === businessId) {
+                  clearOrderPointer()
+                  setSession(null)
+                  setOrderStatus(undefined)
+                  resetChat()
+                }
+                if (returning?.businessId === businessId) {
+                  setReturning(undefined)
+                  resetChat()
+                }
+                if (shopBusinessId === businessId) setShopBusinessId(undefined)
+                toast({ tone: 'success', message: t('The business and its orders were deleted.') })
+              }}
+            />
+          )}
+          {screen === 'shop' && shopBusinessId !== undefined && (
+            <ShopAgainPage
+              key={shopBusinessId}
+              businessId={shopBusinessId}
+              onAskAdvisor={askAdvisorFor}
+              onReorder={reorderFor}
+              onBack={() => goTo('profile', -1)}
             />
           )}
           {screen === 'staff' && (

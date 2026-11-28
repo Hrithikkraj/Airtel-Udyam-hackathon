@@ -104,6 +104,31 @@ export function clearOrderPointer(storage = browserStorage()) {
 export type BusinessDraft = { business_name: string; business_type: string }
 export type ProfileDraft = { full_name: string; phone: string; businesses: Record<string, BusinessDraft> }
 
+/**
+ * The profile draft after fresh details arrive from the server. Each field still showing the old
+ * saved value takes the new one; a field the owner changed keeps their change. A business that is
+ * new, or that the owner never touched, shows its saved details. A deleted business is dropped.
+ */
+export function followFreshDetails(draft: ProfileDraft, before: ProfileDraft, after: ProfileDraft): ProfileDraft {
+  const follow = (current: string, old: string | undefined, fresh: string) => (old === undefined || current === old ? fresh : current)
+  const businesses: Record<string, BusinessDraft> = {}
+  for (const [id, fresh] of Object.entries(after.businesses)) {
+    const current = draft.businesses[id]
+    const old = before.businesses[id]
+    businesses[id] = current
+      ? {
+          business_name: follow(current.business_name, old?.business_name, fresh.business_name),
+          business_type: follow(current.business_type, old?.business_type, fresh.business_type),
+        }
+      : fresh
+  }
+  return {
+    full_name: follow(draft.full_name, before.full_name, after.full_name),
+    phone: follow(draft.phone, before.phone, after.phone),
+    businesses,
+  }
+}
+
 /** A draft is kept only for the account that wrote it, and only for a week. */
 export function readProfileDraft(userId: number, storage = browserStorage(), now = Date.now()): ProfileDraft | null {
   const value = readJson(KEYS.profileDraft, storage)

@@ -10,7 +10,7 @@ from app import auth
 from app.auth import CSRF_HEADER, ORDER_COOKIE_PREFIX, SESSION_COOKIE, token_hash
 from app.database import SessionLocal
 from app.main import app
-from app.models import AuthSession, Business, User, utc_now
+from app.models import AuthSession, Business, Consent, KycRecord, Order, OrderEvent, Quote, User, utc_now
 
 CSRF = {CSRF_HEADER: "1"}
 SHOP = {"employee_count": 3, "city_tier": 1, "has_gstin": True}
@@ -471,3 +471,61 @@ def test_every_new_order_belongs_to_the_signed_in_owner(browser):
     saved = accept_quote(browser)
     with SessionLocal() as db:
         assert db.get(Business, saved["business_id"]).user_id == profile["user_id"]
+
+
+# ---------- Deleting a business ----------
+
+def test_deleting_a_business_removes_it_and_everything_kept_for_it(browser):
+    sign_up(browser)
+    saved = accept_quote(browser)
+    business_id, order_id = saved["business_id"], saved["order_id"]
+    # A second order and a KYC consent, so every kind of row is there to be deleted.
+    browser.post("/api/quotes", json={**QUOTE, "business_id": business_id})
+    notice = browser.get("/api/kyc/notice").json()["version"]
+    assert browser.post(f"/api/kyc/{business_id}/consent", json={"notice_version": notice}).status_code == 200
+
+    response = browser.delete(f"/api/account/businesses/{business_id}")
+    assert response.status_code == 200
+    assert response.json()["businesses"] == []
+    with SessionLocal() as db:
+        assert db.get(Business, business_id) is None
+        assert db.query(Order).filter_by(business_id=business_id).count() == 0
+        assert db.query(Quote).filter_by(business_id=business_id).count() == 0
+        assert db.query(OrderEvent).filter_by(order_id=order_id).count() == 0
+        assert db.query(Consent).filter_by(business_id=business_id).count() == 0
+        assert db.query(KycRecord).filter_by(business_id=business_id).count() == 0
+    assert browser.get(f"/api/orders/{order_id}").status_code == 403
+
+
+def test_deleting_one_business_keeps_the_others(browser):
+    sign_up(browser)
+    first = accept_quote(browser)
+    second = accept_quote(browser)
+    remaining = browser.delete(f"/api/account/businesses/{first['business_id']}").json()["businesses"]
+    assert [business["business_id"] for business in remaining] == [second["business_id"]]
+    assert browser.get(f"/api/orders/{second['order_id']}").status_code == 200
+
+
+def test_nobody_else_can_delete_my_business(browser):
+    sign_up(browser)
+    saved = accept_quote(browser)
+    with new_browser() as stranger:
+        sign_up(stranger)
+        assert stranger.delete(f"/api/account/businesses/{saved['business_id']}").status_code == 403
+    with new_browser() as signed_out:
+        assert signed_out.delete(f"/api/account/businesses/{saved['business_id']}").status_code == 401
+    with SessionLocal() as db:
+        assert db.get(Business, saved["business_id"]) is not None
+
+
+def test_a_business_with_an_installation_booked_cannot_be_deleted(browser):
+    sign_up(browser)
+    saved = accept_quote(browser)
+    with SessionLocal() as db:
+        db.get(Order, saved["order_id"]).status = "installation_scheduled"
+        db.commit()
+    response = browser.delete(f"/api/account/businesses/{saved['business_id']}")
+    assert response.status_code == 409
+    # Cancelling the order first makes it possible.
+    assert browser.post(f"/api/orders/{saved['order_id']}/cancel").status_code == 200
+    assert browser.delete(f"/api/account/businesses/{saved['business_id']}").status_code == 200

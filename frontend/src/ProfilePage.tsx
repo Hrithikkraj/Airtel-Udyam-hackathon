@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Building, ChevronRight, CircleCheck, CircleExclamationPoint, LogOut, Package, Plus, Smartphone, Trash, UserRound } from 'lucide-react'
-import { updateAccount, updateBusiness, type Account, type AccountBusiness } from './api'
+import { Building, ChevronRight, CircleCheck, CircleExclamationPoint, LogOut, Package, Plus, ShoppingBag, Smartphone, Trash, UserRound } from 'lucide-react'
+import { deleteBusiness, updateAccount, updateBusiness, type Account, type AccountBusiness } from './api'
 import { rupees } from './format'
 import { useLanguage } from './i18n'
-import { clearDeviceData, clearProfileDraft, readProfileDraft, saveProfileDraft, type BusinessDraft, type ProfileDraft } from './storage'
+import { clearDeviceData, clearProfileDraft, followFreshDetails, readProfileDraft, saveProfileDraft, type BusinessDraft, type ProfileDraft } from './storage'
 import Avatar from './ui/Avatar'
 import Badge from './ui/Badge'
 import Button from './ui/Button'
@@ -22,6 +22,10 @@ type Props = {
   onOpenOrder: (business: AccountBusiness, orderId: number) => void
   onSignOut: () => Promise<void>
   onStartFresh?: () => void // A clean home page for a new business. Orders here are kept.
+  // Order more for a business the owner already has, without telling us about it again.
+  onShopAgain?: (business: AccountBusiness) => void
+  // Told after a business is deleted, so the page stops following its order if it was.
+  onBusinessDeleted?: (businessId: number) => void
 }
 
 function savedDraft(account: Account): ProfileDraft {
@@ -35,7 +39,6 @@ function savedDraft(account: Account): ProfileDraft {
 function isSame(first: ProfileDraft, second: ProfileDraft) {
   return JSON.stringify(first) === JSON.stringify(second)
 }
-
 // A titled group of settings, like a section in a phone's settings app.
 function SettingsCard({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
   return (
@@ -51,7 +54,7 @@ function SettingsCard({ icon, title, children }: { icon: ReactNode; title: strin
   )
 }
 
-export default function ProfilePage({ account, onAccountChange, onOpenOrder, onSignOut, onStartFresh }: Props) {
+export default function ProfilePage({ account, onAccountChange, onOpenOrder, onSignOut, onStartFresh, onShopAgain, onBusinessDeleted }: Props) {
   const { t, setLanguage } = useLanguage()
   const saved = savedDraft(account)
   // Unsaved changes from earlier on this device are offered back, but only to the same account.
@@ -67,6 +70,16 @@ export default function ProfilePage({ account, onAccountChange, onOpenOrder, onS
   const [businessStatus, setBusinessStatus] = useState<Record<number, Status>>({})
   const [deviceMessage, setDeviceMessage] = useState('')
   const [isSigningOut, setIsSigningOut] = useState(false)
+
+  // The page opens with the account it already had, and fresh details arrive a moment later (for
+  // example a business named by the advisor on a new order). Fields the owner has not edited take
+  // the fresh value; anything they are typing is left alone. Done while rendering, as React advises
+  // for state that follows a prop, so the fields never show the old value.
+  const [shownAccount, setShownAccount] = useState(account)
+  if (account !== shownAccount) {
+    setShownAccount(account)
+    setDraft((current) => followFreshDetails(current, savedDraft(shownAccount), saved))
+  }
 
   // Keep a draft while there are unsaved changes, so a closed tab does not lose them. Clear it once saved.
   useEffect(() => {
@@ -118,6 +131,24 @@ export default function ProfilePage({ account, onAccountChange, onOpenOrder, onS
     } catch (caught) {
       const text = caught instanceof Error ? t(caught.message) : t('That did not work. Try again.')
       setBusinessStatus((current) => ({ ...current, [businessId]: { kind: 'error', text } }))
+    }
+  }
+
+  async function removeBusiness(business: AccountBusiness) {
+    const name = business.business_name || t('this business')
+    const orders = business.orders.length
+    const question = `${t('Delete')} ${name}? ${
+      orders > 0 ? `${t('Its orders will be deleted too:')} ${orders}. ` : ''
+    }${t('Its quotes and verification details are also deleted. This cannot be undone.')}`
+    if (!window.confirm(question)) return
+    setBusinessStatus((current) => ({ ...current, [business.business_id]: { kind: 'saving', text: t('Deleting…') } }))
+    try {
+      const updated = await deleteBusiness(business.business_id)
+      onAccountChange(updated)
+      onBusinessDeleted?.(business.business_id)
+    } catch (caught) {
+      const text = caught instanceof Error ? t(caught.message) : t('That did not work. Try again.')
+      setBusinessStatus((current) => ({ ...current, [business.business_id]: { kind: 'error', text } }))
     }
   }
 
@@ -285,10 +316,33 @@ export default function ProfilePage({ account, onAccountChange, onOpenOrder, onS
                       </span>
                     ))}
                 </p>
-                <p className="mt-2 text-caption text-ink-500">{t('Size, city and GSTIN come from your quote, so they cannot be changed here.')}</p>
-                <Button variant="secondary" size="sm" className="mt-3" onClick={() => saveBusiness(business.business_id)}>
-                  {t('Save business details')}
-                </Button>
+                <p className="mt-2 text-caption text-ink-500">
+                  {t(
+                    onShopAgain
+                      ? 'Size, city and GSTIN come from your quote. You can update them when you shop for this business.'
+                      : 'Size, city and GSTIN come from your quote, so they cannot be changed here.',
+                  )}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  {onShopAgain && (
+                    <Button size="sm" icon={<ShoppingBag aria-hidden="true" size={18} />} onClick={() => onShopAgain(business)}>
+                      {t('Shop for this business')}
+                    </Button>
+                  )}
+                  <Button variant="secondary" size="sm" onClick={() => saveBusiness(business.business_id)}>
+                    {t('Save business details')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-danger-700"
+                    icon={<Trash aria-hidden="true" size={18} />}
+                    disabled={businessStatus[business.business_id]?.kind === 'saving'}
+                    onClick={() => removeBusiness(business)}
+                  >
+                    {t('Delete business')}
+                  </Button>
+                </div>
                 {statusLine(businessStatus[business.business_id] ?? null)}
                 {business.orders.length > 0 && (
                   <ul className="mt-4 space-y-2">

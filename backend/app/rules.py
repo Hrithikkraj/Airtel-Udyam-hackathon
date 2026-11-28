@@ -51,10 +51,12 @@ def check_bundle(items: list[BundleItem], profile: BusinessProfile, catalogue: C
     for product_id in sorted(set(ids) - known_ids):
         errors.append(f"{product_id} is not in the catalogue")
 
+    # A partner product the business already has from us counts, so CCTV can join existing broadband.
+    present_ids = known_ids | set(profile.owned_product_ids)
     for product_id in sorted(known_ids):
         product = catalogue[product_id]
         errors.extend(ineligibility_reasons(product, profile))
-        problem = missing_dependency(product, known_ids, catalogue)
+        problem = missing_dependency(product, present_ids, catalogue)
         if problem:
             errors.append(problem)
     return errors

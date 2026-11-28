@@ -23,6 +23,7 @@ from .pricing import calculate_quote
 from .product_stats import load_peer_stats
 from .recommend import assisted_reasons, infer_segment, owner_chosen_plan, recommend, to_recommended_bundle
 from .rules import Catalogue, check_bundle
+from .shop_again import owned_business, owned_product_ids
 from .schemas import (
     AcceptedQuoteOut,
     BundleItem,
@@ -68,29 +69,54 @@ def checked_quote(request: SaveQuoteRequest, catalogue: Catalogue) -> QuoteOut:
     return calculate_quote(request.items, catalogue)
 
 
+def update_business_details(business: Business, request: SaveQuoteRequest):
+    """The details the quote was built on become the business's details, as the owner confirmed them."""
+    profile = request.profile
+    business.employee_count = profile.employee_count
+    business.num_sites = profile.num_sites
+    business.city_tier = profile.city_tier
+    business.has_gstin = "Y" if profile.has_gstin else "N"
+    business.preferred_language = profile.preferred_language
+    if request.city is not None:
+        business.city = request.city
+    # Empty text means "leave it as it is", so an owner who clears the field never loses the saved name.
+    if request.business_name and request.business_name.strip():
+        business.business_name = request.business_name.strip()
+    if request.business_type and request.business_type.strip():
+        business.business_type = request.business_type.strip()
+
+
 @router.post("", response_model=QuoteSaved, status_code=201)
 def save_quote(request: SaveQuoteRequest, http_request: Request, response: Response, db: Session = Depends(get_db)):
     catalogue = load_catalogue(db)
+    user = signed_in_user(http_request, db)
+    profile = request.profile
+
+    if request.business_id is not None:
+        # Ordering again for a business the owner already has: the new order joins it.
+        business = owned_business(request.business_id, user, db)
+        # What the business has is read here, never taken from the browser.
+        profile = profile.model_copy(update={"owned_product_ids": owned_product_ids(business, db)})
+    else:
+        business = None
+        profile = profile.model_copy(update={"owned_product_ids": []})
+    request = request.model_copy(update={"profile": profile})
     quote_out = checked_quote(request, catalogue)
 
-    profile = request.profile
-    business = Business(
-        business_name=request.business_name,
-        employee_count=profile.employee_count,
-        num_sites=profile.num_sites,
-        city=request.city,
-        city_tier=profile.city_tier,
-        has_gstin="Y" if profile.has_gstin else "N",
-        preferred_language=profile.preferred_language,
-        access_token=secrets.token_urlsafe(32),
-    )
-    # Every order belongs to the signed-in owner, so it shows on their profile on any device.
-    business.user_id = signed_in_user(http_request, db).user_id
+    if business is None:
+        business = Business(access_token=secrets.token_urlsafe(32))
+        # Every order belongs to the signed-in owner, so it shows on their profile on any device.
+        business.user_id = user.user_id
+    update_business_details(business, request)
     quote = new_quote(business, quote_out, request, catalogue)
     # Accepting a quote starts the order, so the tracker works from this moment.
     order = Order(business=business, quote=quote, status=QUOTE_CONFIRMED)
     db.add(order)
     db.commit()
+    if request.business_id is not None:
+        # The business may already be verified. Then this order goes straight to checkout. If the
+        # owner added a GSTIN, the GST certificate is now also needed, and the order waits for it.
+        status_after_change(business, db)
     remember_order(business, response)
     return QuoteSaved(
         quote_id=quote.quote_id,
@@ -99,6 +125,7 @@ def save_quote(request: SaveQuoteRequest, http_request: Request, response: Respo
         access_token=business.access_token,
         status=quote.status,
         quote=quote_out,
+        order_status=order.status,
     )
 
 
@@ -212,6 +239,8 @@ def get_accepted_quote(order: Order = Depends(get_owned_order), db: Session = De
         recommendation=recommendation,
         city=order.business.city,
         can_change=can_change(order),
+        business_name=order.business.business_name,
+        business_type=order.business.business_type,
     )
 
 
@@ -220,20 +249,14 @@ def replace_accepted_quote(request: SaveQuoteRequest, order: Order = Depends(get
     """Replaces the quote of an order that is not placed yet. Same order, same business, same documents."""
     refuse_if_fixed(order)
     catalogue = load_catalogue(db)
+    # What the business has on its other orders is read here, never taken from the browser.
+    owned = owned_product_ids(order.business, db, except_order_id=order.order_id)
+    request = request.model_copy(update={"profile": request.profile.model_copy(update={"owned_product_ids": owned})})
     quote_out = checked_quote(request, catalogue)
 
-    profile = request.profile
     business = order.business
     gstin_before = business.has_gstin
-    business.employee_count = profile.employee_count
-    business.num_sites = profile.num_sites
-    business.city_tier = profile.city_tier
-    business.has_gstin = "Y" if profile.has_gstin else "N"
-    business.preferred_language = profile.preferred_language
-    if request.city is not None:
-        business.city = request.city
-    if request.business_name is not None:
-        business.business_name = request.business_name
+    update_business_details(business, request)
 
     order.quote.status = REPLACED  # Kept, so the history of what was accepted is not lost.
     quote = new_quote(business, quote_out, request, catalogue)
@@ -249,4 +272,5 @@ def replace_accepted_quote(request: SaveQuoteRequest, order: Order = Depends(get
         access_token=business.access_token,
         status=quote.status,
         quote=quote_out,
+        order_status=order.status,
     )
